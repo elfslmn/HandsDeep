@@ -6,4 +6,4 @@ Reference: Oberweger, Markus, Paul Wohlhart, and Vincent Lepetit.
 arXiv preprint arXiv:1502.06807 (2015).
 
 The code is written in Julia by using Knet library. 
-It is my term project of the deep learning class in Koç university
+It is my term project for the deep learning class in Koç university
