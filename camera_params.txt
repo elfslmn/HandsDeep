@@ -1,0 +1,11 @@
+CAMERA PARAMS
+def __init__(self, fx, fy, ux, uy):
+        """
+        Initialize object
+        :param fx: focal length in x direction
+        :param fy: focal length in y direction
+        :param ux: principal point in x direction
+        :param uy: principal point in y direction
+        """
+super(ICVLImporter, self).__init__(241.42, 241.42, 160., 120.) # see Qian et.al.
+super(NYUImporter, self).__init__(588.03, 587.07, 320., 240.)
