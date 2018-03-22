@@ -40,7 +40,7 @@ function readICVLTraining() #!!!!!!!!Not reading all of them memory overflow
    # read training images
    xtrn = Array{Float32, 4}(240,320,1,1);
    folders = readdir(dir);
-   for j in 1:1  #size(folders,1) !!!!!!!!!!!!!!!!!!!!!!!!!
+   for j in 1:size(folders,1)
       f = folders[j]
       info("Reading training folder ", f)
       files = readdir(joinpath(dir,f));
