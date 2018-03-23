@@ -48,6 +48,44 @@ function initEmbed(inputdim, outputdim, Atype, embedSize)
     return w
 end
 
+function initRefine(inputdim, outputdim, Atype)
+    w = Any[]
+    #first conv layer (5,5)x8 with (2,2) pooling
+    (x11,x12,cx1) = (inputdim[1], inputdim[1], 1) ;
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx1,cy))
+    push!(w, zeros(1,1,cy,1))
+    x1 = (div(x11-w1+1,2),div(x12-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=2
+    info(x1);
+
+    #second conv layer (5,5)x8 with (2,2) pooling
+    (x21,x22,cx2) =(inputdim[2], inputdim[2], 1) ;
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx2,cy))
+    push!(w, zeros(1,1,cy,1))
+    x2 = (div(x21-w1+1,2),div(x22-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=2
+    info(x2);
+
+    #third conv layer (3,3)x8 with no pooling
+    (x31,x32,cx3) = (inputdim[3], inputdim[3], 1) ;
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx3,cy))
+    push!(w, zeros(1,1,cy,1))
+    x3 = (div(x31-w1+1,1),div(x32-w2+1,1),cy)
+    info(x3);
+
+    # 1024 fully connected 1
+    s = prod(x1) + prod(x2) + prod(x3);
+    push!(w, xavier(1024,s))
+    push!(w, zeros(1024,1))
+
+    # last fully connected
+    push!(w, xavier(outputdim,1024))
+    push!(w, zeros(outputdim,1))
+
+    return map(Atype, w)
+end
+
 function baseNet(w,x)
     #first conv layer (5,5)x8 with (3,3) pooling
     x = conv4(w[1],x) .+ w[2]
@@ -104,6 +142,44 @@ function embedNet(w,x)
     x = w[13]*mat(x) .+ w[14]
     return x
 end
+
+function extractPatch(img, center, dim)
+    patch = zeros(Float32, dim,dim,1,size(img,4));
+    (px, py) = center;
+    half = Int64.(dim /2 -0.5);
+    for i in px-half : px+half
+        if i>size(img, 2) || i <= 0
+            continue;
+        end
+        for j in py-half : py+half
+            if j>size(img, 1) || j <= 0
+                continue;
+            end
+            patch[,] = img[j,i]
+        end
+    end
+end
+
+function refineNet(w,x, patchSizes, center)
+    (px, py) = center;
+    s1 = Int64.(patchSizes[1] /2 -0.5);
+    x1 = x[px-s1:px+s1, py-s1:py+s1, :, :];
+    println(summary(x1));
+
+    #first conv layer (5,5)x8 with (2,2) pooling
+
+    #second conv layer (5,5)x8 with (2,2) pooling
+
+    #third conv layer (3,3)x8 with no pooling
+
+    # 1024 fully connected 1ayer
+
+    # last fully connected
+
+    return x
+end
+
+
 
 function euc_loss(w, x, truth, model)
     pred = model(w,x);
