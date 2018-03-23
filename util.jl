@@ -155,7 +155,7 @@ function extractPatch(img, center, dim)
             if j>size(img, 1) || j <= 0
                 continue;
             end
-            patch[,] = img[j,i]
+
         end
     end
 end
