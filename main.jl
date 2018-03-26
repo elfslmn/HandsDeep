@@ -1,5 +1,5 @@
 using Knet, ImageView, JLD;
-include("util.jl")
+include("network.jl")
 
 if isfile(joinpath(pwd(),"icvl.jld"))
     dict = load("icvl.jld");
@@ -72,3 +72,6 @@ for (x,y) in dtrn
     println(accuracy_batch(w_emb,x,y,THRESHOLD, embedNet));
     break; # run only for 1 minibatch for now
 end
+
+patchSizes = [31,15,7]; #TODO not stated in the paper ??
+w_ref = initRefine(patchSizes, OUTPUTDIM, Atype);

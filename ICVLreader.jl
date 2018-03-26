@@ -1,5 +1,12 @@
 using FileIO, Images
 
+#= ICVL Label descriptions:
+Each line is corresponding to one image.
+Each line has 16x3 numbers, which indicates (x, y, z) of 16 joint locations.
+Note that (x, y) are in pixels and z is in mm.
+The order of 16 joints is Palm, Thumb root, Thumb mid, Thumb tip, Index root, Index mid, Index tip,
+Middle root, Middle mid, Middle tip, Ring root, Ring mid, Ring tip, Pinky root, Pinky mid, Pinky tip.=#
+
 function readICVLTesting()
    dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
 
@@ -77,4 +84,13 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
    info("ytrn:", summary(ytrn))
 
    return (xtrn, ytrn)
+end
+
+#= return a 4-elements tuple
+:param fx: focal length in x direction
+:param fy: focal length in y direction
+:param ux: principal point in x direction
+:param uy: principal point in y direction =#
+function getICVLCameraParameters()
+    return (241.42, 241.42, 160., 120.)
 end
