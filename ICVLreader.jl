@@ -7,20 +7,25 @@ Note that (x, y) are in pixels and z is in mm.
 The order of 16 joints is Palm, Thumb root, Thumb mid, Thumb tip, Index root, Index mid, Index tip,
 Middle root, Middle mid, Middle tip, Ring root, Ring mid, Ring tip, Pinky root, Pinky mid, Pinky tip.=#
 
+searchdir(path,key) = filter(x->contains(x,key), readdir(path));
+searchlabel(path,key) = filter(x->contains(x,key), readdir(path));
+
 function readICVLTesting()
    dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
 
    # read test images
-   tst1 = readdir(joinpath(dir,"test_seq_1"));
-   tst2 = readdir(joinpath(dir,"test_seq_2"));
-   xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
+   tst1 = searchdir(joinpath(dir,"test_seq_1"), "png");
+   tst2 = searchdir(joinpath(dir,"test_seq_2"), "png");
+   #xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
+   xtst = Array{Float32, 4}(240,320,1,(size(tst1,1)+size(tst2,1)));
 
    info("Reading ICVL test sequence 1...")
    for i in 1:size(tst1,1)
       path = joinpath(dir,"test_seq_1", tst1[i]);
      # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      img = imresize(load(path), 128,128);
-      img = reshape(convert(Array{Float32,2}, img ), 128,128,1,1);
+      #img = imresize(load(path), 128,128);
+      #img = reshape(convert(Array{Float32,2}, img ), 128,128,1,1);
+      img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,i] = img;
    end
 
@@ -28,8 +33,9 @@ function readICVLTesting()
    for j in 1:size(tst2,1)
       path = joinpath(dir,"test_seq_2", tst2[j]);
       # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      img = imresize(load(path), 128,128);
-      img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
+      #img = imresize(load(path), 128,128);
+      #img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
+      img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,(j+size(tst1,1))] = img;
    end
    info("xtst:", summary(xtst))
@@ -50,7 +56,8 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
    dir = Pkg.dir(pwd(),"data","ICVL", "Training", "Depth");
 
    # read training images
-   xtrn = Array{Float32, 4}(128,128,1,1);
+   #xtrn = Array{Float32, 4}(128,128,1,1);
+   xtrn = Array{Float32, 4}(240,320,1,1);
    folders = readdir(dir);
    if s < 0
        s = size(folders,1);
@@ -58,13 +65,15 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
    for j in 1:s
       f = folders[j]
       info("Reading training folder ", f)
-      files = readdir(joinpath(dir,f));
-      x = Array{Float32, 4}(128,128,1,size(files,1));
+      files = searchdir(joinpath(dir,f), "png");
+      #x = Array{Float32, 4}(128,128,1,size(files,1));
+      x = Array{Float32, 4}(240,320,1,size(files,1));
       for i in 1:size(files,1)
          path = joinpath(dir, f, files[i]);
           # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-         img = imresize(load(path), 128,128);
-         img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
+         #img = imresize(load(path), 128,128);
+         #img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
+          img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
          x[:,:,:,i] = img;
       end
       if size(xtrn,4)> 1
@@ -77,10 +86,20 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
    info("xtrn:", summary(xtrn))
 
    # read training labels
-   ytrn = open(readdlm, "data/ICVL/Training/labels.txt")[1:size(xtrn,4),2:end];
-   ytrn = ytrn';
-   # TODO normalize depth to [-1,1] ??
-   ytrn = convert(Array{Float32,2},ytrn);
+   ytrn = Array{Float32, 2}(48,1);
+   whole = open(readdlm, "data/ICVL/Training/labels.txt");
+   for j in 1:s
+        f = folders[j]
+        info("Reading labels of folder ", f);
+        part = whole[contains.(whole[:,1],f), :];
+        y = part[.!contains.(part[:,1],("/"*f)), :];
+        if size(ytrn,2)> 1
+           ytrn = cat(2, ytrn, y[:,2:end]');
+        else
+           ytrn = y[:,2:end]';
+        end
+   end
+
    info("ytrn:", summary(ytrn))
 
    return (xtrn, ytrn)
