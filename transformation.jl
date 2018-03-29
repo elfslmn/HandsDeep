@@ -47,3 +47,21 @@ function joints3DToImg(y, param)
     end
     return y2;
 end
+
+function floatToInt(x)
+    if length(x) > 1
+        xi = convert(Array{Int16, ndims(x)},(floor.(x.*65536)));
+    else
+        xi = convert(Int16,(floor(x*65536)));
+    end
+    return xi;
+end
+
+function intToFloat(x)
+    if length(x) > 1
+        xi = convert(Array{Float32, ndims(x)}, x)./65536;
+    else
+        xi = convert(Float32, x)/65536;
+    end
+    return xi;
+end
