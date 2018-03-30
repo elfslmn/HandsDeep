@@ -58,16 +58,20 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
    # read training images
    #xtrn = Array{Float32, 4}(128,128,1,1);
    xtrn = Array{Float32, 4}(240,320,1,1);
-   folders = readdir(dir);
+   ytrn = Array{Float32, 2}(48,1);
+   whole = open(readdlm, "data/ICVL/Training/labels.txt");
+   foldernames = readdir(dir);
    if s < 0
        s = size(folders,1);
    end
+
    for j in 1:s
-      f = folders[j]
-      info("Reading training folder ", f)
-      files = searchdir(joinpath(dir,f), "png");
+      folder = foldernames[j]
+      info("Reading training folder ", folder)
+      files = searchdir(joinpath(dir,folder), "png");
       #x = Array{Float32, 4}(128,128,1,size(files,1));
       x = Array{Float32, 4}(240,320,1,size(files,1));
+      #read images
       for i in 1:size(files,1)
          path = joinpath(dir, f, files[i]);
           # TODO preprocess the image, extract hand,normalize depth to [-1,1]
@@ -76,30 +80,29 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
           img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
          x[:,:,:,i] = img;
       end
+      #read labels
+      part = whole[contains.(whole[:,1],folder*"/image_"), :];
+      y = part[.!contains.(part[:,1],("/"*folder)), :];
+
+      # There is some images that has no labels. This is to ingore those
+      if size(y,1) > size(files,1)
+          info("Label matrix will truncate for folder ", folder)
+          y = y[1:size(files,1)];
+      elseif size(y,1) < size(files,1)
+          info("İmage matrix will truncate for folder ", folder)
+          x = x[:,:,:,1:size(y,1)];
+      end
+
       if size(xtrn,4)> 1
          xtrn = cat(4, xtrn, x);
+         ytrn = cat(2, ytrn, y[:,2:end]');
       else
          xtrn = x;
+         ytrn = y[:,2:end]';
       end
    end
-
+   ytrn = convert(Array{Float32,2}, ytrn);
    info("xtrn:", summary(xtrn))
-
-   # read training labels
-   ytrn = Array{Float32, 2}(48,1);
-   whole = open(readdlm, "data/ICVL/Training/labels.txt");
-   for j in 1:s
-        f = folders[j]
-        info("Reading labels of folder ", f);
-        part = whole[contains.(whole[:,1],f), :];
-        y = part[.!contains.(part[:,1],("/"*f)), :];
-        if size(ytrn,2)> 1
-           ytrn = cat(2, ytrn, y[:,2:end]');
-        else
-           ytrn = y[:,2:end]';
-        end
-   end
-
    info("ytrn:", summary(ytrn))
 
    return (xtrn, ytrn)
