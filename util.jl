@@ -65,6 +65,6 @@ function comToBounds(com, size, param)
     xstart = convert(Int64, floor((com[1] * com[3] / param[1] - size[1] / 2.) / com[3]*param[1]))
     xend = convert(Int64, floor((com[1] * com[3] / param[1] + size[1] / 2.) / com[3]*param[1]))
     ystart = convert(Int64, floor((com[2] * com[3] / param[2] - size[2] / 2.) / com[3]*param[2]))
-    zstart = convert(Int64, floor((com[2] * com[3] / param[2] + size[2] / 2.) / com[3]*param[2]))
+    yend = convert(Int64, floor((com[2] * com[3] / param[2] + size[2] / 2.) / com[3]*param[2]))
     return [xstart, xend, ystart, yend, zstart, zend]
 end
