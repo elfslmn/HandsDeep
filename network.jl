@@ -45,7 +45,7 @@ function initEmbed(inputdim, outputdim, Atype, embedSize)
     # last fully connected
     push!(w, xavier(outputdim,embedSize))
     push!(w, zeros(outputdim,1))
-    return w
+    return map(Atype, w)
 end
 
 function initRefine(inputdim, outputdim, Atype)
