@@ -23,6 +23,14 @@ function jointsImgTo3D(y, param)
     return y2;
 end
 
+function batchImgTo3D(y, param)
+    y2 = zeros(y);
+    for i in 1:size(y,1)
+        y2[:,i] = jointsImgTo3D(y[:,i], param);
+    end
+    return y2;
+end
+
 #= Denormalize sample from metric 3D to image coordinates
 :sample: joints in (x,y,z) with x,y and z in mm
 :param: camera intirinsic parameters
@@ -48,16 +56,26 @@ function joints3DToImg(y, param)
     return y2;
 end
 
-function floatToInt(x)
+function batch3DToImg(y, param)
+    y2 = zeros(y);
+    for i in 1:size(y,1)
+        y2[:,i] = joints3DToImg(y[:,i], param);
+    end
+    return y2;
+end
+
+# it converts the float pixel value to depth in mm
+function floatToMm(x)
     if length(x) > 1
-        xi = convert(Array{Int16, ndims(x)},(floor.(x.*65536)));
+        xi = convert(Array{Int32, ndims(x)},(floor.(x.*65536)));
     else
-        xi = convert(Int16,(floor(x*65536)));
+        xi = convert(Int32,(floor(x*65536))); # TODO need floor??
     end
     return xi;
 end
 
-function intToFloat(x)
+# it converts a mm lenght to float pixel value.
+function mmToFloat(x)
     if length(x) > 1
         xi = convert(Array{Float32, ndims(x)}, x)./65536;
     else
