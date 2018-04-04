@@ -1,3 +1,5 @@
+using Knet;
+#include("transformation.jl");
 function initBase(inputdim, outputdim, Atype)
     w = Any[]
     (x1,x2,cx) = inputdim;
@@ -179,23 +181,38 @@ function refineNet(w,x, patchSizes, center)
     return x
 end
 
-
-
-function euc_loss(w, x, truth, model)
+# default param is ICVL
+function euc_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
     pred = model(w,x);
-    return ( sum((truth .- pred).^2) / (size(pred,2)) )
+    r = mean((truth - pred).^2)
+    println(r);
+    return r
+    #pred3D = batchImgTo3D(pred, param);
+    #truth3D = batchImgTo3D(truth, param);
+    #return ( sum((truth3D .- pred3D).^2) / (size(pred,2)) )
 end
 euc_loss_all(w,data, model) = mean(euc_loss(w,x,y, model) for (x,y) in data)
 
-lossgradient= grad(euc_loss);
+function huber(a, b; delta = 1)
+    diff = abs(a-b);
+    return delta^2 *(sqrt(1+(diff/delta)^2) -1);
+end
+
+function huber_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
+    pred = model(w,x);
+    r = mean(huber.(pred, truth))
+    println(r);
+    return r
+end
+huber_loss_all(w,data, model) = mean(huber_loss(w,x,y, model) for (x,y) in data)
+
+lossgradient= grad(huber_loss);
 
 function train_sgd(w, dtrn, lr, net) #lr= learning rate, dtrn= all training data
-    # YOUR CODE HERE
    for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
-        for i in 1:length(w)
-            w[i] -= lr * gr[i]
-        end
+        #prm = Momentum(lr=lr, gamma=0.9)
+        update!(w, gr; lr = lr);
     end
 
 end
