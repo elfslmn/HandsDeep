@@ -1,5 +1,5 @@
-using ImageView;
-include("transformation.jl");
+#using ImageView;
+#include("transformation.jl");
 
 function showAnnotation(img,joints)
     if typeof(img[1,1]) == Float32
@@ -58,13 +58,49 @@ end
 :com: center of mass, in image coordinates (x,y,z), z in mm
 :size: (x,y,z) extent of the source crop volume in mm
 :param: camera intirinsics
-:return: xstart, xend, ystart, yend, zstart, zend =#
+:return: xstart, xend, ystart, yend, zstart, zend (x,y in pixels, z in mm)=#
 function comToBounds(com, size, param)
-    zstart = com[3] - size[3] / 2.
-    zend = com[3] + size[3] / 2.
+    zstart = convert(Int64, floor(com[3] - size[3] / 2.));
+    zend = convert(Int64, floor(com[3] + size[3] / 2.));
     xstart = convert(Int64, floor((com[1] * com[3] / param[1] - size[1] / 2.) / com[3]*param[1]))
     xend = convert(Int64, floor((com[1] * com[3] / param[1] + size[1] / 2.) / com[3]*param[1]))
     ystart = convert(Int64, floor((com[2] * com[3] / param[2] - size[2] / 2.) / com[3]*param[2]))
     yend = convert(Int64, floor((com[2] * com[3] / param[2] + size[2] / 2.) / com[3]*param[2]))
-    return [xstart, xend, ystart, yend, zstart, zend]
+    r = [xstart, ystart, zstart] , [xend, yend, zend];
+    return r
+end
+
+function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend)
+    cropped = dpt[max(ystart, 1):min(yend, size(dpt,1)), max(xstart, 1):min(xend, size(dpt,2))]
+    zstartf = mmToFloat(zstart);
+    zendf = mmToFloat(zend);
+    cropped[cropped .< zstartf] = zstartf;
+    cropped[cropped .> zendf] = zendf;
+
+    # to keep the w/h ratio
+    padded = parent(padarray(cropped, Fill(zendf,(abs(ystart)-max(ystart, 0),abs(xstart)-max(xstart, 0))
+                    ,(abs(yend)-min(yend, size(dpt,1)), abs(xend)-min(xend, size(dpt,2))))))
+    return padded
+end
+
+function extractHand(dpt, param)
+    com = calculateCoM(dpt);
+    st, fn = comToBounds(com, (250,250,250), param)
+    #showAnnotation(dpt, vcat(com,st,fn))
+    p = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]);
+    return imresize(p,(128,128));
+end
+
+# normalize between -1 and 1;
+function normalizeDepth(dpt)
+    dptc = copy(dpt);
+    maxz = maximum(dpt);
+    minz = minimum(dpt);
+    dptc = (dptc .- minz)./(0.5*(maxz-minz)) .- 1;
+    return dptc;
+end
+# img should be Array{Float32,2}
+function preprocess(img, param)
+    hd = extractHand(img, param);
+    return normalizeDepth(hd);
 end
