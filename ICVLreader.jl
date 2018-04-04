@@ -1,5 +1,5 @@
 using FileIO, Images
-
+include("util.jl");
 #= ICVL Label descriptions:
 Each line is corresponding to one image.
 Each line has 16x3 numbers, which indicates (x, y, z) of 16 joint locations.
@@ -17,15 +17,15 @@ function readICVLTesting()
    tst1 = searchdir(joinpath(dir,"test_seq_1"), "png");
    tst2 = searchdir(joinpath(dir,"test_seq_2"), "png");
    #xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
-   xtst = Array{Float32, 4}(240,320,1,(size(tst1,1)+size(tst2,1)));
+   xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
 
    info("Reading ICVL test sequence 1...")
    for i in 1:size(tst1,1)
       path = joinpath(dir,"test_seq_1", tst1[i]);
-     # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      #img = imresize(load(path), 128,128);
-      #img = reshape(convert(Array{Float32,2}, img ), 128,128,1,1);
-      img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
+     #preprocess the image, extract hand,normalize depth to [-1,1]
+      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
+      img = reshape(p, 128,128,1,1);
+      #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,i] = img;
    end
 
@@ -33,9 +33,9 @@ function readICVLTesting()
    for j in 1:size(tst2,1)
       path = joinpath(dir,"test_seq_2", tst2[j]);
       # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      #img = imresize(load(path), 128,128);
-      #img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
-      img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
+      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
+      img = reshape(p, 128,128,1,1);
+      #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,(j+size(tst1,1))] = img;
    end
    info("xtst:", summary(xtst))
@@ -47,7 +47,7 @@ function readICVLTesting()
    ytst = ytst';
    # TODO normalize depth to [-1,1] ??
    ytst = convert(Array{Float32,2},ytst);
-   info("ytst", summary(ytst))
+   info("ytst: ", summary(ytst))
    return (xtst, ytst)
 end
 
@@ -57,12 +57,12 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
 
    # read training images
    #xtrn = Array{Float32, 4}(128,128,1,1);
-   xtrn = Array{Float32, 4}(240,320,1,1);
+   xtrn = Array{Float32, 4}(128,128,1,1);
    ytrn = Array{Float32, 2}(48,1);
    whole = open(readdlm, "data/ICVL/Training/labels.txt");
    foldernames = readdir(dir);
    if s < 0
-       s = size(folders,1);
+       s = size(foldernames,1);
    end
 
    for j in 1:s
@@ -70,14 +70,14 @@ function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory 
       info("Reading training folder ", folder)
       files = searchdir(joinpath(dir,folder), "png");
       #x = Array{Float32, 4}(128,128,1,size(files,1));
-      x = Array{Float32, 4}(240,320,1,size(files,1));
+      x = Array{Float32, 4}(128,128,1,size(files,1));
       #read images
       for i in 1:size(files,1)
-         path = joinpath(dir, f, files[i]);
+         path = joinpath(dir, folder, files[i]);
           # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-         #img = imresize(load(path), 128,128);
-         #img = reshape(convert(Array{Float32,2}, img), 128,128,1,1);
-          img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
+          p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
+          img = reshape(p, 128,128,1,1);
+          #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
          x[:,:,:,i] = img;
       end
       #read labels

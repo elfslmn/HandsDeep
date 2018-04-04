@@ -20,7 +20,7 @@ LR = 0.01;
 BATCHSIZE = 128;
 THRESHOLD = 1000; # not specified in the paper
 EMBEDING = 8;
-INPUTDIM = (128,128,1);
+INPUTDIM = (240,320,1);
 OUTPUTDIM = 48;
 Atype = gpu() >= 0 ? KnetArray{Float32} : Array{Float32}
 
