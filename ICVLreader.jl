@@ -1,4 +1,4 @@
-using FileIO, Images
+using FileIO, Images;
 include("util.jl");
 #= ICVL Label descriptions:
 Each line is corresponding to one image.
@@ -51,61 +51,70 @@ function readICVLTesting()
    return (xtst, ytst)
 end
 
-
-function readICVLTraining(;s::Int64=-1) #!!!!!!!!Not reading all of them memory overflow
+# sz is for early stop
+function readICVLTraining(;sz = -1)
    dir = Pkg.dir(pwd(),"data","ICVL", "Training", "Depth");
 
    # read training images
-   #xtrn = Array{Float32, 4}(128,128,1,1);
-   xtrn = Array{Float32, 4}(128,128,1,1);
-   ytrn = Array{Float32, 2}(48,1);
-   whole = open(readdlm, "data/ICVL/Training/labels.txt");
-   foldernames = readdir(dir);
-   if s < 0
-       s = size(foldernames,1);
+   if isfile(joinpath(pwd(),"icvl_trnfiles.txt"))
+       files = open(readdlm, "icvl_trnfiles.txt");
+   else
+       whole = open(readdlm, "data/ICVL/Training/labels.txt");
+       files = removeNotUsedLabels(whole);
+       whole = nothing
+       open("icvl_trnfiles.txt", "w") do io
+            writedlm(io, files);
+       end
    end
 
-   for j in 1:s
-      folder = foldernames[j]
-      info("Reading training folder ", folder)
-      files = searchdir(joinpath(dir,folder), "png");
-      #x = Array{Float32, 4}(128,128,1,size(files,1));
-      x = Array{Float32, 4}(128,128,1,size(files,1));
-      #read images
-      for i in 1:size(files,1)
-         path = joinpath(dir, folder, files[i]);
-          # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-          p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
-          img = reshape(p, 128,128,1,1);
-          #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
-         x[:,:,:,i] = img;
-      end
-      #read labels
-      part = whole[contains.(whole[:,1],folder*"/image_"), :];
-      y = part[.!contains.(part[:,1],("/"*folder)), :];
+   xtrn = Array{Float32, 4}(128,128,1,size(files,1));
+   ytrn = Array{Float32, 2}(48,size(files,1));
 
-      # There is some images that has no labels. This is to ingore those
-      if size(y,1) > size(files,1)
-          info("Label matrix will truncate for folder ", folder)
-          y = y[1:size(files,1)];
-      elseif size(y,1) < size(files,1)
-          info("İmage matrix will truncate for folder ", folder)
-          x = x[:,:,:,1:size(y,1)];
-      end
+   c = 0;
+   info("Starting to read training set...")
+   for i in 1:size(files,1)
+        path = joinpath(dir,files[i,1]);
+        if(!isfile(path))
+           continue;
+        end
+        # preprocess the image, extract hand,normalize depth to [-1,1]
+        c +=1;
+        p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
+        img = reshape(p, 128,128,1,1);
+        joints = files[i,2:end]';
+        #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
+        xtrn[:,:,:,c] = img;
+        ytrn[:,c] = joints;
 
-      if size(xtrn,4)> 1
-         xtrn = cat(4, xtrn, x);
-         ytrn = cat(2, ytrn, y[:,2:end]');
-      else
-         xtrn = x;
-         ytrn = y[:,2:end]';
-      end
+        if c%1000 == 0
+            info(c," images are read..");
+        end
+
+        if c == sz
+            break;
+        end
    end
-   ytrn = convert(Array{Float32,2}, ytrn);
+   xtrn = xtrn[:,:,:,1:c];
+   ytrn = ytrn[:,1:c];
+
+   #ytrn = convert(Array{Float32,2}, ytrn); ???? bu niye vardı
    info("xtrn:", summary(xtrn))
    info("ytrn:", summary(ytrn))
 
    return (xtrn, ytrn)
+
+end
+
+function removeNotUsedLabels(whole)
+    part = whole[.!contains.(whole[:,1],"112-5/"), :];
+    part = part[.!contains.(part[:,1],"67-5/"), :];
+    part = part[.!contains.(part[:,1],"157-5/"), :];
+    part = part[.!contains.(part[:,1],"180/"), :];
+    part = part[.!contains.(part[:,1],"22-5/"), :];
+    part = part[.!contains.(part[:,1],"45/"), :];
+    part = part[.!contains.(part[:,1],"90/"), :];
+    part = part[.!contains.(part[:,1],"135/"), :];
+    return part;
 end
 
 #= return a 4-elements tuple
