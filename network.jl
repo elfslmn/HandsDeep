@@ -1,4 +1,5 @@
 using Knet;
+using MultivariateStats
 #include("transformation.jl");
 function initBase(inputdim, outputdim, Atype)
     w = Any[]
@@ -36,7 +37,7 @@ function initBase(inputdim, outputdim, Atype)
     return map(Atype, w)
 end
 
-function initEmbed(inputdim, outputdim, Atype, embedSize)
+function initEmbed(inputdim, outputdim, Atype, embedSize, y)
     w = initBase(inputdim, outputdim, Atype);
     pop!(w); pop!(w); # remove last layer params
 
@@ -45,7 +46,8 @@ function initEmbed(inputdim, outputdim, Atype, embedSize)
     push!(w, zeros(embedSize,1))
 
     # last fully connected - reconstruction
-    push!(w, xavier(outputdim,embedSize))
+    prior_w = apply_pca(embedSize, ytrn);
+    push!(w, prior_w)
     push!(w, zeros(outputdim,1))
     return map(Atype, w)
 end
@@ -276,3 +278,8 @@ function accuracy_all(w, data, threshold, net)
 end
 
 #accuracy_all(w, data, threshold, net) = mean(accuracy_batch(w, x,y, threshold, net) for (x,y) in data)
+
+function apply_pca(sz, y)
+    M = fit(PCA, y; pratio=1.);
+    return projection(M)[:,1:sz]
+end
