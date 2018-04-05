@@ -44,7 +44,7 @@ function initEmbed(inputdim, outputdim, Atype, embedSize)
     push!(w, xavier(embedSize,1024))
     push!(w, zeros(embedSize,1))
 
-    # last fully connected
+    # last fully connected - reconstruction
     push!(w, xavier(outputdim,embedSize))
     push!(w, zeros(outputdim,1))
     return map(Atype, w)
@@ -184,16 +184,38 @@ end
 # default param is ICVL
 function euc_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
     pred = model(w,x);
-    r = mean((truth - pred).^2)
-    println(r);
-    return r
+    dist = 0;
+    for j in 1:size(pred,2)
+        for i in 1:3:size(pred,1)
+            dist += sqrt((truth[i,j]-pred[i,j])^2 + (truth[i+1,j]-pred[i+1,j])^2 + (truth[i+2,j]-pred[i+2,j])^2);
+        end
+    end
+    return dist / size(pred,2);
+    #return mean(sum((pred - truth).^2, 1))
+
     #pred3D = batchImgTo3D(pred, param);
     #truth3D = batchImgTo3D(truth, param);
     #return ( sum((truth3D .- pred3D).^2) / (size(pred,2)) )
 end
-euc_loss_all(w,data, model) = mean(euc_loss(w,x,y, model) for (x,y) in data)
 
-function huber(a, b; delta = 1)
+#euc_loss_all(w,data, model) = mean(euc_loss(w,x,y, model) for (x,y) in data)
+
+function euc_loss_all(w,data, model)
+    s, n = 0.0, 0
+    for (x,y) in data
+        loss = euc_loss(w,x,y, model);
+        if !isnan(loss)
+			s += loss
+			n += 1
+        else
+            println("Loss in nan")
+		end
+    end
+    return s/n;
+end
+
+
+function huber(a, b; delta = 100)
     diff = abs(a-b);
     return delta^2 *(sqrt(1+(diff/delta)^2) -1);
 end
@@ -201,39 +223,49 @@ end
 function huber_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
     pred = model(w,x);
     r = mean(huber.(pred, truth))
-    println(r);
     return r
 end
-huber_loss_all(w,data, model) = mean(huber_loss(w,x,y, model) for (x,y) in data)
 
-lossgradient= grad(huber_loss);
+function l2reg(w,lambda)
+    J = Float32(0);
+    J += Float32(lambda) * sum(sum(abs2,wi) for wi in w[1:2:end]);
+    return J
+end
 
-function train_sgd(w, dtrn, lr, net) #lr= learning rate, dtrn= all training data
+function objective(w, x, truth, model)
+    h = euc_loss(w, x, truth, model);
+    l2 = l2reg(w, 0.001)
+    return (h+l2)
+end
+
+lossgradient= grad(objective);
+
+function train_sgd(w, dtrn, net, opt) #lr= learning rate, dtrn= all training data
    for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
-        #prm = Momentum(lr=lr, gamma=0.9)
-        update!(w, gr; lr = lr);
+        update!(w, gr; lr = 0.01);
     end
-
 end
 
 
 function accuracy_batch(w, x,y, threshold, net)
     positive =0;
     pred = net(w,x);
-    for i in 1:3:size(pred,1)
-        dist = sqrt((y[i]-pred[i])^2 + (y[i+1]-pred[i+1])^2 + (y[i+2]-pred[+2])^2);
-        if dist>threshold
-            break;
-        end
-        if i == (size(pred,1) -2)
-            positive +=1;
+    for j in 1:size(pred,2)
+        for i in 1:3:size(pred,1)
+            dist = sqrt((y[i,j]-pred[i,j])^2 + (y[i+1,j]-pred[i+1,j])^2 + (y[i+2,j]-pred[i+2,j])^2);
+            if dist>threshold
+                break;
+            end
+            if i == (size(pred,1) -2)
+                positive +=1;
+            end
         end
     end
     return positive / size(y,2)
 end
 
-#= function accuracy_all(w, data, threshold, net)
+function accuracy_all(w, data, threshold, net)
     all = 0;
     positive =0;
     for (x,y) in data
@@ -241,6 +273,6 @@ end
         positive += accuracy_batch(w, x,y, threshold, net)*size(y,2) ;
     end
     return positive / all
-end =#
+end
 
-accuracy_all(w, data, threshold, net) = mean(accuracy_batch(w, x,y, threshold, net) for (x,y) in data)
+#accuracy_all(w, data, threshold, net) = mean(accuracy_batch(w, x,y, threshold, net) for (x,y) in data)
