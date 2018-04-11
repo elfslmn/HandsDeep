@@ -246,6 +246,7 @@ function train_sgd(w, dtrn, net, opt) #lr= learning rate, dtrn= all training dat
    for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
         update!(w, gr; lr = 0.01);
+        #update!(w, gr, opt);
     end
 end
 
@@ -282,4 +283,29 @@ end
 function apply_pca(sz, y)
     M = fit(PCA, y; pratio=1.);
     return projection(M)[:,1:sz]
+end
+
+function getLossandAccuracy(w,data,threshold, net)
+    dist = 0;
+    positive =0;
+    all = 0;
+    for (x,y) in data
+        all += size(y,2);
+        pred = net(w,x);
+        for j in 1:size(pred,2)
+            pass = true;
+            for i in 1:3:size(pred,1)
+                d = sqrt((y[i,j]-pred[i,j])^2 + (y[i+1,j]-pred[i+1,j])^2 + (y[i+2,j]-pred[i+2,j])^2);
+                dist +=d;
+                if d>threshold
+                    pass = false;
+                end
+            end
+            if pass
+                positive +=1;
+            end
+        end
+
+    end
+    return (dist/all , positive/all )
 end
