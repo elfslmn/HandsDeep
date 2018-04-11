@@ -18,6 +18,7 @@ function readICVLTesting()
    tst2 = searchdir(joinpath(dir,"test_seq_2"), "png");
    #xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
    xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
+   paths = Any[];
 
    info("Reading ICVL test sequence 1...")
    for i in 1:size(tst1,1)
@@ -45,8 +46,8 @@ function readICVLTesting()
    l2 = open(readdlm, "data/ICVL/Testing/test_seq_2.txt")[:,2:end];
    ytst = vcat(l1,l2);
    ytst = ytst';
-   # TODO normalize depth to [-1,1] ??
    ytst = convert(Array{Float32,2},ytst);
+   ytst = ytst./1000; # normalize
    info("ytst: ", summary(ytst))
    return (xtst, ytst)
 end
@@ -96,6 +97,7 @@ function readICVLTraining(;sz = -1)
    end
    xtrn = xtrn[:,:,:,1:c];
    ytrn = ytrn[:,1:c];
+   ytrn = ytrn./1000; # normalize
 
    #ytrn = convert(Array{Float32,2}, ytrn); ???? bu niye vardı
    info("xtrn:", summary(xtrn))
@@ -125,3 +127,11 @@ end
 function getICVLCameraParameters()
     return (241.42, 241.42, 160., 120.)
 end
+
+
+for i in 1:size(files,1)
+     path = joinpath(dir,files[i,1]);
+     if(!isfile(path))
+        println(path)
+     end
+ end
