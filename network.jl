@@ -90,6 +90,91 @@ function initRefine(inputdim, outputdim, Atype)
     return map(Atype, w)
 end
 
+#Filter and pool sizes according to implementation(scalenet.py) not same as stated in paper
+function initScale(inputdim, outputdim, Atype; resizeFactor = 2)
+    w = Any[]
+    # 1 - full scale (128,128,1)
+    (x1,x2,cx) = inputdim;
+    #first conv layer (5,5)x8 with (4,4) pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,4),div(x2-w2+1,4),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #second conv layer (5,5)x8 with (2,2) pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,2),div(x2-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #third conv layer (3,3)x8 , no pooling
+    (w1,w2,cy) = (3,3,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    x_full = (div(x1-w1+1,1),div(x2-w2+1,1),cy)
+    info(x_full)
+
+# 2 - half scale (64,64,1)
+    (x1,x2,cx) = (inputdim[1]/resizeFactor, inputdim[2]/resizeFactor, inputdim[3]) ;
+    #first conv layer (5,5)x8 with (2,2) pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,2),div(x2-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #second conv layer (5,5)x8 with (2,2) pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,2),div(x2-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #third conv layer (3,3)x8 , no pooling
+    (w1,w2,cy) = (3,3,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    x_half = (div(x1-w1+1,1),div(x2-w2+1,1),cy)
+    x_half = map(Int, x_half);
+    info(x_half)
+
+# 3 - quarter scale (32,32,1)
+    (x1,x2,cx) = (inputdim[1]/(resizeFactor^2), inputdim[2]/(resizeFactor^2), inputdim[3]) ;
+    #first conv layer (5,5)x8 with (2,2) pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,2),div(x2-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #second conv layer (5,5)x8 with no pooling
+    (w1,w2,cy) = (5,5,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    (x1,x2,cx) = (div(x1-w1+1,1),div(x2-w2+1,1),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=3
+
+    #third conv layer (3,3)x8 , no pooling
+    (w1,w2,cy) = (3,3,8);
+    push!(w, xavier(w1,w2,cx,cy))
+    push!(w, zeros(1,1,cy,1))
+    x_quar = (div(x1-w1+1,1),div(x2-w2+1,1),cy)
+    x_quar = map(Int, x_quar);
+    info(x_quar)
+
+# concanete all scales
+    # 1024 fully connected 1
+    s = prod(x_full) + prod(x_half) + prod(x_quar);
+    push!(w, xavier(1024,s))
+    push!(w, zeros(1024,1))
+
+    # 1024 fully connected 2
+    push!(w, xavier(1024,1024))
+    push!(w, zeros(1024,1))
+
+    # last fully connected
+    push!(w, xavier(outputdim,1024))
+    push!(w, zeros(outputdim,1))
+
+    return map(Atype, w)
+end
+
 function baseNet(w,x)
     #first conv layer (5,5)x8 with (3,3) pooling
     x = conv4(w[1],x) .+ w[2]
@@ -104,6 +189,7 @@ function baseNet(w,x)
     x = relu.(x)
 
     # 1024 fully connected 1
+    info(size(x)); info(size(mat(x)));
     x = w[7]*mat(x) .+ w[8]
     x = relu.(x)
 
@@ -147,21 +233,72 @@ function embedNet(w,x)
     return x
 end
 
-function extractPatch(img, center, dim)
-    patch = zeros(Float32, dim,dim,1,size(img,4));
-    (px, py) = center;
-    half = Int64.(dim /2 -0.5);
-    for i in px-half : px+half
-        if i>size(img, 2) || i <= 0
-            continue;
-        end
-        for j in py-half : py+half
-            if j>size(img, 1) || j <= 0
-                continue;
-            end
+function scaleNet(w,x_all)
+    # 1 - full scale (128,128,1)
+    #first conv layer (5,5)x8 with (4,4) pooling
+    x = conv4(w[1],x_all[1]) .+ w[2]
+    x = pool(relu.(x); window =4)
 
-        end
-    end
+    #second conv layer (5,5)x8 with (2,2) pooling
+    x = conv4(w[3],x) .+ w[4]
+    x = pool(relu.(x); window =2)
+
+    #third conv layer (3,3)x8 , no pooling
+    x = conv4(w[5],x) .+ w[6]
+    x_full = relu.(x)
+    info(size(mat(x_full)))
+
+# 2 - half scale (64,64,1)
+    #first conv layer (5,5)x8 with (2,2) pooling
+    x = conv4(w[7],x_all[2]) .+ w[8]
+    x = pool(relu.(x); window =2)
+
+    #second conv layer (5,5)x8 with (2,2) pooling
+    x = conv4(w[9],x) .+ w[10]
+    x = pool(relu.(x); window =2)
+
+    #third conv layer (3,3)x8 , no pooling
+    x = conv4(w[11],x) .+ w[12]
+    x_half = relu.(x)
+    info(size(x_half))
+
+# 3 - quarter scale (32,32,1)
+    #first conv layer (5,5)x8 with (2,2) pooling
+    x = conv4(w[13],x_all[3]) .+ w[14]
+    x = pool(relu.(x); window =2)
+
+    #second conv layer (5,5)x8 with no pooling
+    x = conv4(w[15],x) .+ w[16]
+    x = relu.(x)
+
+    #third conv layer (3,3)x8 , no pooling
+    x = conv4(w[17],x) .+ w[18]
+    x_quar= relu.(x)
+    info(size(x_quar))
+
+# concanete all scales
+    x = vcat(mat(x_full), mat(x_half), mat(x_quar));
+    info(size(x))
+    # 1024 fully connected 1
+    x = w[19]*mat(x) .+ w[20]
+    x = relu.(x)
+
+    # 1024 fully connected 2
+    x = w[21]*mat(x) .+ w[22]
+    x = relu.(x)
+
+    # last fully connected
+    x = w[23]*mat(x) .+ w[24]
+    return x;
+end
+
+function extractPatch(img, center, dim)
+    xstart = center[1] - dim[1]/2;
+    xend = xstart + dim[1];
+    ystart = center[2] - dim[2]/2;
+    yend = ystart + dim[2];
+    p = getCrop(dpt,xstart, xend, ystart, yend, 0, 0; cropz = false);
+    return p
 end
 
 function refineNet(w,x, patchSizes, center)
@@ -207,11 +344,11 @@ function euc_loss_all(w,data, model)
     for (x,y) in data
         loss = euc_loss(w,x,y, model);
         if !isnan(loss)
-			s += loss
-			n += 1
+            s += loss
+            n += 1
         else
             println("Loss in nan")
-		end
+        end
     end
     return s/n;
 end
@@ -243,7 +380,7 @@ end
 lossgradient= grad(objective);
 
 function train_sgd(w, dtrn, net, opt) #lr= learning rate, dtrn= all training data
-   for (x,y) in dtrn
+    for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
         update!(w, gr; lr = 0.01);
         #update!(w, gr, opt);
