@@ -9,6 +9,7 @@ Middle root, Middle mid, Middle tip, Ring root, Ring mid, Ring tip, Pinky root, 
 
 searchdir(path,key) = filter(x->contains(x,key), readdir(path));
 searchlabel(path,key) = filter(x->contains(x,key), readdir(path));
+cubeSize = 128;
 
 function readICVLTesting()
    dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
@@ -17,15 +18,15 @@ function readICVLTesting()
    tst1 = searchdir(joinpath(dir,"test_seq_1"), "png");
    tst2 = searchdir(joinpath(dir,"test_seq_2"), "png");
    #xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
-   xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
+   xtst = Array{Float32, 4}(cubeSize,cubeSize,1,(size(tst1,1)+size(tst2,1)));
    paths = Any[];
 
    info("Reading ICVL test sequence 1...")
    for i in 1:size(tst1,1)
       path = joinpath(dir,"test_seq_1", tst1[i]);
      #preprocess the image, extract hand,normalize depth to [-1,1]
-      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
-      img = reshape(p, 128,128,1,1);
+      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
+      img = reshape(p, cubeSize,cubeSize,1,1);
       #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,i] = img;
    end
@@ -34,8 +35,8 @@ function readICVLTesting()
    for j in 1:size(tst2,1)
       path = joinpath(dir,"test_seq_2", tst2[j]);
       # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
-      img = reshape(p, 128,128,1,1);
+      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
+      img = reshape(p, cubeSize,cubeSize,1,1);
       #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
       xtst[:,:,:,(j+size(tst1,1))] = img;
    end
@@ -68,7 +69,7 @@ function readICVLTraining(;sz = -1)
        end
    end
 
-   xtrn = Array{Float32, 4}(128,128,1,size(files,1));
+   xtrn = Array{Float32, 4}(cubeSize,cubeSize,1,size(files,1));
    ytrn = Array{Float32, 2}(48,size(files,1));
 
    c = 0;
@@ -80,8 +81,8 @@ function readICVLTraining(;sz = -1)
         end
         # preprocess the image, extract hand,normalize depth to [-1,1]
         c +=1;
-        p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters())
-        img = reshape(p, 128,128,1,1);
+        p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
+        img = reshape(p, cubeSize,cubeSize,1,1);
         joints = files[i,2:end]';
         #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
         xtrn[:,:,:,c] = img;
@@ -127,11 +128,3 @@ end
 function getICVLCameraParameters()
     return (241.42, 241.42, 160., 120.)
 end
-
-
-for i in 1:size(files,1)
-     path = joinpath(dir,files[i,1]);
-     if(!isfile(path))
-        println(path)
-     end
- end

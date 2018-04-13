@@ -1,4 +1,4 @@
-#using ImageView;
+using ImageView, Images;
 #include("transformation.jl");
 
 function showAnnotation(img,joints)
@@ -70,12 +70,14 @@ function comToBounds(com, size, param)
     return r
 end
 
-function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend)
+function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend; cropz = true)
     cropped = dpt[max(ystart, 1):min(yend, size(dpt,1)), max(xstart, 1):min(xend, size(dpt,2))]
-    zstartf = mmToFloat(zstart);
-    zendf = mmToFloat(zend);
-    cropped[cropped .< zstartf] = zstartf;
-    cropped[cropped .> zendf] = zendf;
+    if cropz
+        zstartf = mmToFloat(zstart);
+        zendf = mmToFloat(zend);
+        cropped[cropped .< zstartf] = zstartf;
+        cropped[cropped .> zendf] = zendf;
+    end
 
     # to keep the w/h ratio
     padded = parent(padarray(cropped, Fill(zendf,(abs(ystart)-max(ystart, 0),abs(xstart)-max(xstart, 0))
@@ -83,12 +85,12 @@ function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend)
     return padded
 end
 
-function extractHand(dpt, param)
+function extractHand(dpt, param, cubeSize)
     com = calculateCoM(dpt);
     st, fn = comToBounds(com, (250,250,250), param)
     #showAnnotation(dpt, vcat(com,st,fn))
     p = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]);
-    return imresize(p,(128,128));
+    return imresize(p,(cubeSize,cubeSize));
 end
 
 # normalize between -1 and 1;
@@ -100,7 +102,7 @@ function normalizeDepth(dpt)
     return dptc;
 end
 # img should be Array{Float32,2}
-function preprocess(img, param)
-    hd = extractHand(img, param);
+function preprocess(img, param, cubeSize)
+    hd = extractHand(img, param, cubeSize);
     return normalizeDepth(hd);
 end
