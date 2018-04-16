@@ -1,6 +1,7 @@
 using Knet;
 using MultivariateStats
 #include("transformation.jl");
+
 function initBase(inputdim, outputdim, Atype)
     w = Any[]
     (x1,x2,cx) = inputdim;
@@ -290,15 +291,6 @@ function scaleNet(w,x_all)
     # last fully connected
     x = w[23]*mat(x) .+ w[24]
     return x;
-end
-
-function extractPatch(img, center, dim)
-    xstart = center[1] - dim[1]/2;
-    xend = xstart + dim[1];
-    ystart = center[2] - dim[2]/2;
-    yend = ystart + dim[2];
-    p = getCrop(dpt,xstart, xend, ystart, yend, 0, 0; cropz = false);
-    return p
 end
 
 function refineNet(w,x, patchSizes, center)
