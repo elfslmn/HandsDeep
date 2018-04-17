@@ -176,7 +176,8 @@ function initScale(inputdim, outputdim, Atype; resizeFactor = 2)
     return map(Atype, w)
 end
 
-function baseNet(w,x)
+
+function baseNet(w,x; drop = true);
     #first conv layer (5,5)x8 with (3,3) pooling
     x = conv4(w[1],x) .+ w[2]
     x = pool(relu.(x); window =3)
@@ -190,13 +191,18 @@ function baseNet(w,x)
     x = relu.(x)
 
     # 1024 fully connected 1
-    info(size(x)); info(size(mat(x)));
     x = w[7]*mat(x) .+ w[8]
     x = relu.(x)
+
+    #dropout
+    x = drop ? dropout(x,0.3) : x ;
 
     # 1024 fully connected 2
     x = w[9]*mat(x) .+ w[10]
     x = relu.(x)
+
+    #dropout
+    x = drop ? dropout(x,0.3) : x ;
 
     # last fully connected
     x = w[11]*mat(x) .+ w[12]
@@ -204,7 +210,7 @@ function baseNet(w,x)
     return x
 end
 
-function embedNet(w,x)
+function embedNet(w,x; drop = true)
     #first conv layer (5,5)x8 with (3,3) pooling
     x = conv4(w[1],x) .+ w[2]
     x = pool(relu.(x); window =3)
@@ -221,9 +227,15 @@ function embedNet(w,x)
     x = w[7]*mat(x) .+ w[8]
     x = relu.(x)
 
+    #dropout
+    x = drop ? dropout(x,0.3) : x ;
+
     # 1024 fully connected 2
     x = w[9]*mat(x) .+ w[10]
     x = relu.(x)
+
+    #dropout
+    x = drop ? dropout(x,0.3) : x ;
 
     # embeding layer
     x = w[11]*mat(x) .+ w[12]
@@ -293,6 +305,7 @@ function scaleNet(w,x_all)
     return x;
 end
 
+#TODO complete
 function refineNet(w,x, patchSizes, center)
     (px, py) = center;
     s1 = Int64.(patchSizes[1] /2 -0.5);
@@ -322,7 +335,6 @@ function euc_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
         end
     end
     return dist / size(pred,2);
-    #return mean(sum((pred - truth).^2, 1))
 
     #pred3D = batchImgTo3D(pred, param);
     #truth3D = batchImgTo3D(truth, param);
@@ -374,8 +386,8 @@ lossgradient= grad(objective);
 function train_sgd(w, dtrn, net, opt) #lr= learning rate, dtrn= all training data
     for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
-        update!(w, gr; lr = 0.01);
-        #update!(w, gr, opt);
+        #update!(w, gr; lr = 0.01);
+        update!(w, gr, opt);
     end
 end
 
@@ -410,22 +422,27 @@ end
 #accuracy_all(w, data, threshold, net) = mean(accuracy_batch(w, x,y, threshold, net) for (x,y) in data)
 
 function apply_pca(sz, y)
-    M = fit(PCA, y; pratio=1.);
+    M = fit(PCA, map(Float32,y); pratio=1.);
     return projection(M)[:,1:sz]
 end
 
-function getLossandAccuracy(w,data,threshold, net)
+#return avarage joint distance error and accuracy
+# y should be in pixel coordinates and normalized
+function getLossandAccuracy(w,data,threshold, net, param)
     dist = 0;
     positive =0;
-    all = 0;
+    all = data.length;
     for (x,y) in data
-        all += size(y,2);
         pred = net(w,x);
+        pred3D = batchImgTo3D(pred.*1000, param);
+        y3D = batchImgTo3D(y.*1000, param);
+        #pred3D = pred;
+        #y3D = y;
         for j in 1:size(pred,2)
             pass = true;
             for i in 1:3:size(pred,1)
-                d = sqrt((y[i,j]-pred[i,j])^2 + (y[i+1,j]-pred[i+1,j])^2 + (y[i+2,j]-pred[i+2,j])^2);
-                dist +=d;
+                d = sqrt((y3D[i,j]-pred3D[i,j])^2 + (y3D[i+1,j]-pred3D[i+1,j])^2 + (y3D[i+2,j]-pred3D[i+2,j])^2);
+                dist +=d/(size(pred,1)/3); # to calculate mean distance of all joints
                 if d>threshold
                     pass = false;
                 end
