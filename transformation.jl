@@ -25,7 +25,7 @@ end
 
 function batchImgTo3D(y, param)
     y2 = zeros(y);
-    for i in 1:size(y,1)
+    for i in 1:size(y,2)
         y2[:,i] = jointsImgTo3D(y[:,i], param);
     end
     return y2;
@@ -58,7 +58,7 @@ end
 
 function batch3DToImg(y, param)
     y2 = zeros(y);
-    for i in 1:size(y,1)
+    for i in 1:size(y,2)
         y2[:,i] = joints3DToImg(y[:,i], param);
     end
     return y2;
