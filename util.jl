@@ -55,18 +55,21 @@ end
 function calculateCoM(dpt; dset = 0)
     dc = copy(dpt);
     if dset == 0 #ICVL
-        min = mmToFloat(10); # hand can be in the range between 10mm to 1500mm
-        max = mmToFloat(1500);
-        dc[dc .< min] = 0.;
-        dc[dc .> max] = 0.;
+        minz = mmToFloat(10); # hand can be in the range between 10mm to 1500mm
+        maxz = mmToFloat(1000);
+        dc[dc .< minz] = 0.;
+        dc[dc .> maxz] = 0.;
     else #NYU
-        min = 10;
-        max = 1000;
-        dc[dc .< min] = 0;
-        dc[dc .> max] = 0;
+        minz = 0;
+        maxz = 1000;
+        dc[dc .< minz] = 0;
+        dc[dc .> maxz] = 0;
     end
 
     num = countnz(dc);
+    if num == 0
+        return NaN;
+    end
     x=0.; y=0.; z=0.;
 
     for c in 1:size(dc,2) # TODO ???????*
@@ -127,8 +130,11 @@ function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend; cropz = true, ds
 end
 
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
-function extractHand(dpt, param, cubeSize; dset = 0)
+function extractHand(dpt, param, imgSize; dset = 0)
     com = calculateCoM(dpt; dset = dset);
+    if any(isnan, com)
+        return NaN, NaN;
+    end
     if dset == 0 #ICVL
         st, fn = comToBounds(com, (250,250,250), param)
     else #NYU
@@ -136,7 +142,7 @@ function extractHand(dpt, param, cubeSize; dset = 0)
     end
     #showAnnotation(dpt, vcat(com,st,fn))
     p = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=dset);
-    return imresize(p,(cubeSize,cubeSize));
+    return imresize(p,(imgSize,imgSize)), com ;
 end
 
 # normalize between -1 and 1;
@@ -151,9 +157,18 @@ end
 
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
 # img should be Array{Float32,2} -> ICVL
-function preprocess(img, param, cubeSize; dset = 0)
-    hd = extractHand(img, param, cubeSize; dset = dset);
-    return normalizeDepth(hd);
+function preprocess(img, param, imgSize; dset = 0)
+    (hd , com) = extractHand(img, param, imgSize; dset = dset);
+    if dset == 0
+        centerz = mmToFloat(com[3])
+        cube = mmToFloat(250/2);
+    else
+        centerz = com[3]
+        cube = 300/2;
+    end
+    # normalize
+    hd = (hd.- centerz)./ cube;
+    return hd, com;
 end
 
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
