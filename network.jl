@@ -47,7 +47,7 @@ function initEmbed(inputdim, outputdim, Atype, embedSize, y)
     push!(w, zeros(embedSize,1))
 
     # last fully connected - reconstruction
-    prior_w = apply_pca(embedSize, ytrn);
+    prior_w = getPcaComponents(embedSize, ytrn);
     push!(w, prior_w)
     push!(w, zeros(outputdim,1))
     return map(Atype, w)
@@ -325,20 +325,21 @@ function refineNet(w,x, patchSizes, center)
     return x
 end
 
-# default param is ICVL
-function euc_loss(w, x, truth, model; param = (241.42, 241.42, 160., 120.))
+function euc_loss(w, x, truth, model)
     pred = model(w,x);
     dist = 0;
-    for j in 1:size(pred,2)
+    #=for j in 1:size(pred,2)
         for i in 1:3:size(pred,1)
             dist += sqrt((truth[i,j]-pred[i,j])^2 + (truth[i+1,j]-pred[i+1,j])^2 + (truth[i+2,j]-pred[i+2,j])^2);
         end
+    end =#
+    for j in 1:size(pred,2)
+        for i in 1:size(pred,1)
+            dist += (truth[i,j]-pred[i,j])^2
+        end
     end
-    return dist / size(pred,2);
 
-    #pred3D = batchImgTo3D(pred, param);
-    #truth3D = batchImgTo3D(truth, param);
-    #return ( sum((truth3D .- pred3D).^2) / (size(pred,2)) )
+    return dist / size(pred,2);
 end
 
 #euc_loss_all(w,data, model) = mean(euc_loss(w,x,y, model) for (x,y) in data)
@@ -386,7 +387,6 @@ lossgradient= grad(objective);
 function train_sgd(w, dtrn, net, opt) #lr= learning rate, dtrn= all training data
     for (x,y) in dtrn
         gr = lossgradient(w,x,y, net)
-        #update!(w, gr; lr = 0.01);
         update!(w, gr, opt);
     end
 end
@@ -421,23 +421,23 @@ end
 
 #accuracy_all(w, data, threshold, net) = mean(accuracy_batch(w, x,y, threshold, net) for (x,y) in data)
 
-function apply_pca(sz, y)
+function getPcaComponents(sz, y)
     M = fit(PCA, map(Float32,y); pratio=1.);
     return projection(M)[:,1:sz]
 end
 
-#return avarage joint distance error and accuracy
-# y should be in pixel coordinates and normalized
+#return avarage joint distance error(in mm) and accuracy
+# y should be in 3d world coordinates and normalized(./250)
 function getLossandAccuracy(w,data,threshold, net, param)
     dist = 0;
     positive =0;
     all = data.length;
     for (x,y) in data
         pred = net(w,x);
-        pred3D = batchImgTo3D(pred.*1000, param);
-        y3D = batchImgTo3D(y.*1000, param);
-        #pred3D = pred;
-        #y3D = y;
+
+        pred3D = pred.*250;
+        y3D = y.*250;
+
         for j in 1:size(pred,2)
             pass = true;
             for i in 1:3:size(pred,1)
@@ -453,5 +453,5 @@ function getLossandAccuracy(w,data,threshold, net, param)
         end
 
     end
-    return (dist/all , positive/all )
+    return (dist/all , positive/all*100 )
 end
