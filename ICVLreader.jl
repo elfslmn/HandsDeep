@@ -9,48 +9,56 @@ Middle root, Middle mid, Middle tip, Ring root, Ring mid, Ring tip, Pinky root, 
 
 searchdir(path,key) = filter(x->contains(x,key), readdir(path));
 searchlabel(path,key) = filter(x->contains(x,key), readdir(path));
-cubeSize = 128;
+imgSize = 128;
 
-function readICVLTesting()
-   dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
+# sz is for early stop
+function readICVLTesting(;sz = -1)
+    dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
+    l1 = open(readdlm, "data/ICVL/Testing/test_seq_1.txt");
+    l2 = open(readdlm, "data/ICVL/Testing/test_seq_2.txt");
+    files = vcat(l1,l2);
 
-   # read test images
-   tst1 = searchdir(joinpath(dir,"test_seq_1"), "png");
-   tst2 = searchdir(joinpath(dir,"test_seq_2"), "png");
-   #xtst = Array{Float32, 4}(128,128,1,(size(tst1,1)+size(tst2,1)));
-   xtst = Array{Float32, 4}(cubeSize,cubeSize,1,(size(tst1,1)+size(tst2,1)));
-   paths = Any[];
+    xtst = Array{Float32, 4}(imgSize,imgSize,1,size(files,1));
+    ytst = Array{Float32, 2}(48,size(files,1));
 
-   info("Reading ICVL test sequence 1...")
-   for i in 1:size(tst1,1)
-      path = joinpath(dir,"test_seq_1", tst1[i]);
-     #preprocess the image, extract hand,normalize depth to [-1,1]
-      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
-      img = reshape(p, cubeSize,cubeSize,1,1);
-      #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
-      xtst[:,:,:,i] = img;
-   end
+    c = 0;
+    param = getICVLCameraParameters();
+    info("Starting to read testing set...")
+    for i in 1:size(files,1)
+         path = joinpath(dir,files[i,1]);
+         if(!isfile(path))
+            continue;
+         end
+         # preprocess the image, extract hand,normalize depth to [-1,1]
+         c +=1;
+         p, com = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), imgSize)
+         img = reshape(p, imgSize,imgSize,1,1);
 
-   info("Reading ICVL test sequence 2...")
-   for j in 1:size(tst2,1)
-      path = joinpath(dir,"test_seq_2", tst2[j]);
-      # TODO preprocess the image, extract hand,normalize depth to [-1,1]
-      p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
-      img = reshape(p, cubeSize,cubeSize,1,1);
-      #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
-      xtst[:,:,:,(j+size(tst1,1))] = img;
-   end
-   info("xtst:", summary(xtst))
+         # ground truth
+         joints = files[i,2:end]';
+         joints3D = jointsImgTo3D(joints, param);
+         com3D = jointImgTo3D(com, param);
+         joints3DCrop = copy(joints3D);
+         for i in 1:16
+             joints3DCrop[3*(i-1)+1] -= com3D[1];
+             joints3DCrop[3*(i-1)+2] -= com3D[2];
+             joints3DCrop[3*(i-1)+3] -= com3D[3];
+         end
 
-   # read test labels
-   l1 = open(readdlm, "data/ICVL/Testing/test_seq_1.txt")[:,2:end];
-   l2 = open(readdlm, "data/ICVL/Testing/test_seq_2.txt")[:,2:end];
-   ytst = vcat(l1,l2);
-   ytst = ytst';
-   ytst = convert(Array{Float32,2},ytst);
-   ytst = ytst./1000; # normalize
-   info("ytst: ", summary(ytst))
-   return (xtst, ytst)
+         xtst[:,:,:,c] = img;
+         ytst[:,c] = joints3DCrop./250; # cropped, normalized, 3D
+
+         if c == sz
+             break;
+         end
+    end
+    xtst = xtst[:,:,:,1:c];
+    ytst = ytst[:,1:c];
+
+    info("xtst:", summary(xtst))
+    info("ytst:", summary(ytst))
+
+    return (xtst, ytst)
 end
 
 # sz is for early stop
@@ -69,10 +77,11 @@ function readICVLTraining(;sz = -1)
        end
    end
 
-   xtrn = Array{Float32, 4}(cubeSize,cubeSize,1,size(files,1));
+   xtrn = Array{Float32, 4}(imgSize,imgSize,1,size(files,1));
    ytrn = Array{Float32, 2}(48,size(files,1));
 
    c = 0;
+   param = getICVLCameraParameters();
    info("Starting to read training set...")
    for i in 1:size(files,1)
         path = joinpath(dir,files[i,1]);
@@ -81,12 +90,22 @@ function readICVLTraining(;sz = -1)
         end
         # preprocess the image, extract hand,normalize depth to [-1,1]
         c +=1;
-        p = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), cubeSize)
-        img = reshape(p, cubeSize,cubeSize,1,1);
+        p, com = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), imgSize)
+        img = reshape(p, imgSize,imgSize,1,1);
+
+        # ground truth
         joints = files[i,2:end]';
-        #img = reshape(convert(Array{Float32,2}, load(path) ), 240,320,1,1);
+        joints3D = jointsImgTo3D(joints, param);
+        com3D = jointImgTo3D(com, param);
+        joints3DCrop = copy(joints3D);
+        for i in 1:16
+            joints3DCrop[3*(i-1)+1] -= com3D[1];
+            joints3DCrop[3*(i-1)+2] -= com3D[2];
+            joints3DCrop[3*(i-1)+3] -= com3D[3];
+        end
+
         xtrn[:,:,:,c] = img;
-        ytrn[:,c] = joints;
+        ytrn[:,c] = joints3DCrop./250; # cropped, normalized, 3D
 
         if c%1000 == 0
             info(c," images are read..");
@@ -98,14 +117,11 @@ function readICVLTraining(;sz = -1)
    end
    xtrn = xtrn[:,:,:,1:c];
    ytrn = ytrn[:,1:c];
-   ytrn = ytrn./1000; # normalize
 
-   #ytrn = convert(Array{Float32,2}, ytrn); ???? bu niye vardı
    info("xtrn:", summary(xtrn))
    info("ytrn:", summary(ytrn))
 
    return (xtrn, ytrn)
-
 end
 
 function removeNotUsedLabels(whole)
