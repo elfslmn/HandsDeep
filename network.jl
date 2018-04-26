@@ -482,3 +482,23 @@ function getRefineLoss(w,data)
     end
     return (dist/all)
 end
+
+function getMeanErrorOfEachJoint(y, pred; dset= 0)
+    nSample = size(y,2);
+    nJoint = convert(Int64, size(y,1)/3);
+
+    scale = dset == 0 ? 250:300;
+    pred3D = pred.*scale;
+    y3D = y.*scale;
+
+    err = zeros(nJoint)
+    for j in 1:nSample
+        for i in 1:nJoint
+            err[i] += sqrt((y3D[3(i-1)+1,j]-pred3D[3(i-1)+1,j])^2 +
+                            (y3D[3(i-1)+2,j]-pred3D[3(i-1)+2,j])^2 +
+                            (y3D[3(i-1)+3,j]-pred3D[3(i-1)+3,j])^2);
+        end
+    end
+    err = err./nSample;
+    return err;
+end
