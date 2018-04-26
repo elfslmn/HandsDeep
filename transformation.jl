@@ -83,3 +83,38 @@ function mmToFloat(x)
     end
     return xi;
 end
+
+function transformPoint2D(pt, M)
+    pt2 = map(Float32, M * [pt[1], pt[2], 1])
+    return [pt2[1] / pt2[3], pt2[2] / pt2[3]]
+end
+
+# M applies scaling and translation to com
+function transformJoints2D(y, M)
+    if length(y)%3 != 0
+        println("Error: Y should be a multiple of 3");
+        return;
+    end
+    y2 = copy(y);
+    for i = 1:3:length(y)
+        y2[i:i+1] = transformPoint2D(y[i:i+1], M);
+    end
+    return y2;
+end
+
+# dset =0 ICVL, 1->NYU
+function convertCrop3DToImg(com3D, joints3DCrop, dset)
+    if dset == 0
+        joints3D = copy(joints3DCrop.*250);
+        param = (241.42, 241.42, 160., 120.);
+    else
+        joints3D = copy(joints3DCrop.*300);
+        param = (588.03, 587.07, 320., 240.)
+    end
+    for i in 1:16
+        joints3D[3*(i-1)+1] += com3D[1];
+        joints3D[3*(i-1)+2] += com3D[2];
+        joints3D[3*(i-1)+3] += com3D[3];
+    end
+    return joints3DToImg(joints3D, param)
+end
