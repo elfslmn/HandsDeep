@@ -1,4 +1,5 @@
-using ImageView, Images;
+using Images;
+#using ImageView;
 #include("transformation.jl");
 
 # joints and pred should be unnormalized
@@ -8,6 +9,8 @@ function showAnnotation(img,joints; pred = Any[])
             img = normalizeDepth(map(Float32, img); a=0,b=1);
         end
         imgg = convert(Array{Gray{N0f16},ndims(img)}, img);
+    else
+        imgg = copy(img);
     end
     m = convert(Float32, maximum(imgg));
     img3 = RGB.(imgg);
@@ -15,16 +18,15 @@ function showAnnotation(img,joints; pred = Any[])
     h = size(img,1);
     for i in 1:3:length(joints)
         xr = round(Int,joints[i]);
+        xr = xr < 1 ? 1:xr;
         xl = xr + 5;
+        xl = xl > w ? w:xl;
+
         yt = round(Int,joints[i+1]);
-        # print("x,y="); print(xr); print("-"); println(yt);
+        yt = yt < 1 ? 1:yt;
         yb = yt + 5;
-        if xl > w
-            xl = w;
-        end
-        if yb>h
-            yb = h;
-        end
+        yb = yb > h ? h:yb;
+
         img3[yt:yb, xr:xl] = RGB{N0f16}(m ,0.,0.);
     end
     # show prediction
@@ -56,7 +58,7 @@ function calculateCoM(dpt; dset = 0)
     dc = copy(dpt);
     if dset == 0 #ICVL
         minz = mmToFloat(10); # hand can be in the range between 10mm to 1500mm
-        maxz = mmToFloat(1000);
+        maxz = mmToFloat(500);
         dc[dc .< minz] = 0.;
         dc[dc .> maxz] = 0.;
     else #NYU
@@ -68,7 +70,7 @@ function calculateCoM(dpt; dset = 0)
 
     num = countnz(dc);
     if num == 0
-        return NaN;
+        return NaN, NaN, NaN;
     end
     x=0.; y=0.; z=0.;
 
@@ -124,16 +126,25 @@ function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend; cropz = true, ds
     end
 
     # to keep the w/h ratio
-    padded = parent(padarray(cropped, Fill(zendf,(abs(ystart)-max(ystart, 0),abs(xstart)-max(xstart, 0))
-                    ,(abs(yend)-min(yend, size(dpt,1)), abs(xend)-min(xend, size(dpt,2))))))
-    return padded
+    padded = parent(padarray(cropped, Fill(zendf,(abs(ystart-1)-max(ystart-1, 0),abs(xstart-1)-max(xstart-1, 0))
+    ,(abs(yend)-min(yend, size(dpt,1)), abs(xend)-min(xend, size(dpt,2))))))
+
+    trans = eye(Float32, 3)
+    trans[1, 3] = -xstart;
+    trans[2, 3] = -ystart;
+
+    scale = eye(Float32,3);
+    scale[1,1] = 128/size(padded,1);
+    scale[2,2] = 128/size(padded,2);
+
+    return padded, scale*trans
 end
 
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
 function extractHand(dpt, param, imgSize; dset = 0)
     com = calculateCoM(dpt; dset = dset);
     if any(isnan, com)
-        return NaN, NaN;
+        return NaN, NaN, NaN;
     end
     if dset == 0 #ICVL
         st, fn = comToBounds(com, (250,250,250), param)
@@ -141,8 +152,9 @@ function extractHand(dpt, param, imgSize; dset = 0)
         st, fn = comToBounds(com, (300,300,300), param)
     end
     #showAnnotation(dpt, vcat(com,st,fn))
-    p = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=dset);
-    return imresize(p,(imgSize,imgSize)), com ;
+    p, M = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=dset);
+
+    return imresize(p,(imgSize,imgSize)), com , M ;
 end
 
 # normalize between -1 and 1;
@@ -158,7 +170,10 @@ end
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
 # img should be Array{Float32,2} -> ICVL
 function preprocess(img, param, imgSize; dset = 0)
-    (hd , com) = extractHand(img, param, imgSize; dset = dset);
+    (hd , com, M) = extractHand(img, param, imgSize; dset = dset);
+    if any(isnan, hd)
+        return NaN, NaN, NaN;
+    end
     if dset == 0
         centerz = mmToFloat(com[3])
         cube = mmToFloat(250/2);
@@ -168,15 +183,28 @@ function preprocess(img, param, imgSize; dset = 0)
     end
     # normalize
     hd = (hd.- centerz)./ cube;
-    return hd, com;
+    return hd, com, M;
 end
 
 #:dset = 0 -> ICVL,  type=1 -> NYU =#
 function extractPatch(img, center, dim; dset = 0)
-    xstart = convert(Int, floor(center[1] - dim[1]/2))+1;
-    xend = xstart + dim[1]-1;
-    ystart = convert(Int, floor(center[2] - dim[2]/2))+1;
-    yend = ystart + dim[2]-1;
-    p = getCrop(img,xstart, xend, ystart, yend, 0, 0; cropz = false, dset = dset);
+    xstart = convert(Int, floor(center[1] - dim/2))+1;
+    xend = xstart + dim-1;
+    ystart = convert(Int, floor(center[2] - dim/2))+1;
+    yend = ystart + dim-1;
+    if dset == 0
+        zstart = convert(Int, floor(center[3] - 250/2))+1;
+        zend = zstart + 250-1;
+        cube = mmToFloat(250/2);
+        centerz = mmToFloat(center[3])
+    else
+        zstart = convert(Int, floor(center[3] - 300/2))+1;
+        zend = zstart + 300/2-1;
+        cube = 300/2;
+        centerz = center[3];
+    end
+    #info(xstart, xend, ystart, yend, zstart, zend);
+    p, M = getCrop(img,xstart, xend, ystart, yend, zstart, zend; dset = dset);
+    p = (p.- centerz)./ cube;
     return p
 end
