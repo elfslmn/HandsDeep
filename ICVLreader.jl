@@ -1,5 +1,6 @@
 using FileIO, Images;
-include("util.jl");
+#include("util.jl");
+
 #= ICVL Label descriptions:
 Each line is corresponding to one image.
 Each line has 16x3 numbers, which indicates (x, y, z) of 16 joint locations.
@@ -12,7 +13,7 @@ searchlabel(path,key) = filter(x->contains(x,key), readdir(path));
 imgSize = 128;
 
 # sz is for early stop
-function readICVLTesting(;sz = -1)
+function readICVLTesting(;sz = -1,raw = false)
     dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
     l1 = open(readdlm, "data/ICVL/Testing/test_seq_1.txt");
     l2 = open(readdlm, "data/ICVL/Testing/test_seq_2.txt");
@@ -20,6 +21,9 @@ function readICVLTesting(;sz = -1)
 
     xtst = Array{Float32, 4}(imgSize,imgSize,1,size(files,1));
     ytst = Array{Float32, 2}(48,size(files,1));
+    coms3D = Array{Float32, 2}(3,size(files,1)); # center of masses in world coor.
+    trMats = Array{Float32, 3}(3,3,size(files,1)); # transformation matrices
+    ximg = Array{Float32, 3}(240,320,size(files,1));
 
     c = 0;
     param = getICVLCameraParameters();
@@ -30,23 +34,32 @@ function readICVLTesting(;sz = -1)
             continue;
          end
          # preprocess the image, extract hand,normalize depth to [-1,1]
-         c +=1;
-         p, com = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), imgSize)
-         img = reshape(p, imgSize,imgSize,1,1);
+         dpt = convert(Array{Float32,2}, load(path));
+         p, com, M = preprocess(dpt, getICVLCameraParameters(), imgSize)
+         if any(isnan, p)
+             continue;
+         end
 
+         c +=1;
+         if raw
+             ximg[:,:,c] = dpt;
+         end
+         img = reshape(p, imgSize,imgSize,1,1);
          # ground truth
          joints = files[i,2:end]';
          joints3D = jointsImgTo3D(joints, param);
          com3D = jointImgTo3D(com, param);
          joints3DCrop = copy(joints3D);
-         for i in 1:16
-             joints3DCrop[3*(i-1)+1] -= com3D[1];
-             joints3DCrop[3*(i-1)+2] -= com3D[2];
-             joints3DCrop[3*(i-1)+3] -= com3D[3];
+         for j in 1:16
+             joints3DCrop[3*(j-1)+1] -= com3D[1];
+             joints3DCrop[3*(j-1)+2] -= com3D[2];
+             joints3DCrop[3*(j-1)+3] -= com3D[3];
          end
 
          xtst[:,:,:,c] = img;
          ytst[:,c] = joints3DCrop./250; # cropped, normalized, 3D
+         coms3D[:,c] = com3D;
+         trMats[:,:,c] = M;
 
          if c == sz
              break;
@@ -54,31 +67,46 @@ function readICVLTesting(;sz = -1)
     end
     xtst = xtst[:,:,:,1:c];
     ytst = ytst[:,1:c];
+    coms3D = coms3D[:,1:c];
+    trMats = trMats[:,:,1:c];
+    if raw
+        ximg = ximg[:,:,1:c];
+    end
 
     info("xtst:", summary(xtst))
     info("ytst:", summary(ytst))
 
-    return (xtst, ytst)
+    if raw
+        info("Raw images:", summary(ximg))
+        return (xtst, ytst,coms3D, trMats, ximg )
+    else
+        return (xtst, ytst,coms3D, trMats )
+    end
+
+
 end
 
 # sz is for early stop
-function readICVLTraining(;sz = -1)
+function readICVLTraining(;sz = -1, raw = false)
    dir = Pkg.dir(pwd(),"data","ICVL", "Training", "Depth");
 
    # read training images
-   if isfile(joinpath(pwd(),"icvl_trnfiles.txt"))
-       files = open(readdlm, "icvl_trnfiles.txt");
+   if isfile(joinpath(pwd(),"data/ICVL/Training/icvl_trnfiles.txt"))
+       files = open(readdlm, "data/ICVL/Training/icvl_trnfiles.txt");
    else
        whole = open(readdlm, "data/ICVL/Training/labels.txt");
        files = removeNotUsedLabels(whole);
        whole = nothing
-       open("icvl_trnfiles.txt", "w") do io
+       open("data/ICVL/Training/icvl_trnfiles.txt", "w") do io
             writedlm(io, files);
        end
    end
 
    xtrn = Array{Float32, 4}(imgSize,imgSize,1,size(files,1));
    ytrn = Array{Float32, 2}(48,size(files,1));
+   coms3D = Array{Float32, 2}(3,size(files,1)); # center of masses in world coor.
+   trMats = Array{Float32, 3}(3,3,size(files,1)); # transformation matrices
+   ximg = Array{Float32, 3}(240,320,size(files,1));
 
    c = 0;
    param = getICVLCameraParameters();
@@ -89,23 +117,33 @@ function readICVLTraining(;sz = -1)
            continue;
         end
         # preprocess the image, extract hand,normalize depth to [-1,1]
+        dpt = convert(Array{Float32,2}, load(path));
+        p, com , M = preprocess(dpt, param, imgSize)
+        if any(isnan, p)
+            continue;
+        end
         c +=1;
-        p, com = preprocess(convert(Array{Float32,2}, load(path)), getICVLCameraParameters(), imgSize)
-        img = reshape(p, imgSize,imgSize,1,1);
+        if raw
+            ximg[:,:,c] = dpt;
+        end
 
+        img = reshape(p, imgSize,imgSize,1,1);
         # ground truth
         joints = files[i,2:end]';
         joints3D = jointsImgTo3D(joints, param);
         com3D = jointImgTo3D(com, param);
+
         joints3DCrop = copy(joints3D);
-        for i in 1:16
-            joints3DCrop[3*(i-1)+1] -= com3D[1];
-            joints3DCrop[3*(i-1)+2] -= com3D[2];
-            joints3DCrop[3*(i-1)+3] -= com3D[3];
+        for j in 1:16
+            joints3DCrop[3*(j-1)+1] -= com3D[1];
+            joints3DCrop[3*(j-1)+2] -= com3D[2];
+            joints3DCrop[3*(j-1)+3] -= com3D[3];
         end
 
         xtrn[:,:,:,c] = img;
         ytrn[:,c] = joints3DCrop./250; # cropped, normalized, 3D
+        coms3D[:,c] = com3D;
+        trMats[:,:,c] = M;
 
         if c%1000 == 0
             info(c," images are read..");
@@ -117,11 +155,22 @@ function readICVLTraining(;sz = -1)
    end
    xtrn = xtrn[:,:,:,1:c];
    ytrn = ytrn[:,1:c];
+   coms3D = coms3D[:,1:c];
+   trMats = trMats[:,:,1:c];
+   if raw
+       ximg = ximg[:,:,1:c];
+   end
 
    info("xtrn:", summary(xtrn))
    info("ytrn:", summary(ytrn))
 
-   return (xtrn, ytrn)
+   if raw
+       info("Raw images:", summary(ximg))
+       return (xtrn, ytrn, coms3D, trMats, ximg);
+   else
+       return (xtrn, ytrn, coms3D, trMats);
+   end
+
 end
 
 function removeNotUsedLabels(whole)
@@ -143,4 +192,53 @@ end
 :param uy: principal point in y direction =#
 function getICVLCameraParameters()
     return (241.42, 241.42, 160., 120.)
+end
+
+function getICVLJointImages(;sz=-1)
+    dir = Pkg.dir(pwd(),"data","ICVL", "Training", "Depth");
+
+    # read training images
+    if isfile(joinpath(pwd(),"data/ICVL/Training/icvl_trnfiles.txt"))
+        files = open(readdlm, "data/ICVL/Training/icvl_trnfiles.txt");
+    else
+        whole = open(readdlm, "data/ICVL/Training/labels.txt");
+        files = removeNotUsedLabels(whole);
+        whole = nothing
+        open("data/ICVL/Training/icvl_trnfiles.txt", "w") do io
+             writedlm(io, files);
+        end
+    end
+
+    njoint = 16;
+
+    #(height, width, channel, image count, joint count);
+    x64 = Array{Float32, 5}(64,64,1,size(files,1),njoint);
+    y = Array{Float32, 3}(3,size(files,1),njoint);
+
+    info("Starting to read training set...")
+    c=0;
+    for i in 1:size(files,1)
+         path = joinpath(dir,files[i,1]);
+         if(!isfile(path))
+            continue;
+         end
+         img = convert(Array{Float32,2}, load(path));
+
+         # ground truth
+         joints = files[i,2:end];
+         for j in 0:njoint-1
+             p = extractPatch(img, joints[3*j+1:3*j+3], 64);
+             x64[:,:,:,i,j+1] = p;
+         end
+         c += 1;
+         if c%1000 == 0
+             info(c," images are read..");
+         end
+         if c == sz
+             break;
+         end
+    end
+    x64 = x64[:,:,:,1:c,:]
+    info("Images:" , summary(x64));
+    return x64;
 end
