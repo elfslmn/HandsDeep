@@ -23,11 +23,13 @@ function readICVLTesting(;sz = -1,raw = false)
     ytst = Array{Float32, 2}(48,size(files,1));
     coms3D = Array{Float32, 2}(3,size(files,1)); # center of masses in world coor.
     trMats = Array{Float32, 3}(3,3,size(files,1)); # transformation matrices
-    ximg = Array{Float32, 3}(240,320,size(files,1));
+    if raw
+        ximg = Array{Float32, 3}(240,320,size(files,1));
+    end
 
     c = 0;
     param = getICVLCameraParameters();
-    info("Starting to read testing set...")
+    info("Starting to read test set...")
     for i in 1:size(files,1)
          path = joinpath(dir,files[i,1]);
          if(!isfile(path))
@@ -106,7 +108,9 @@ function readICVLTraining(;sz = -1, raw = false)
    ytrn = Array{Float32, 2}(48,size(files,1));
    coms3D = Array{Float32, 2}(3,size(files,1)); # center of masses in world coor.
    trMats = Array{Float32, 3}(3,3,size(files,1)); # transformation matrices
-   ximg = Array{Float32, 3}(240,320,size(files,1));
+   if raw
+       ximg = Array{Float32, 3}(240,320,size(files,1));
+   end
 
    c = 0;
    param = getICVLCameraParameters();
