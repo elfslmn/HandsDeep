@@ -7,23 +7,27 @@ imgSize = 128;
 
 function readNYUTesting(;sz=-1, raw = false)
    dir = Pkg.dir(pwd(),"data","NYU", "test");
-
    # read test images
    filenames = searchdir(dir, "png");
-   xtst = Array{Float32, 4}(imgSize,imgSize,1,length(filenames));
+   if sz == -1
+       sz =  length(filenames)
+   end
+   xtst = Array{Float32, 4}(imgSize,imgSize,1,sz);
 
    info("Reading NYU test sequence ...")
    file = matopen(joinpath(dir,"joint_data.mat"))
    joints3D = read(file, "joint_xyz")[1,:,:,:]
    close(file)
 
-   joints3DCrop = Array{Float32, 1}(size(joints3D,2)*size(joints3D,3));
-   ytst = Array{Float32, 2}(size(joints3D,2)*size(joints3D,3), size(joints3D,1));
-   coms3D = Array{Float32, 2}(3,length(filenames)); # center of masses in world coor.
-   trMats = Array{Float32, 3}(3,3,length(filenames)); # transformation matrices
-   validIndices= Array{Int64}(length(filenames));
+   jointIndices = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 27, 30, 31, 32] .+1;
+   joints3DCrop = Array{Float32, 1}(length(jointIndices)*3);
+   ytst = Array{Float32, 2}(length(jointIndices)*3, size(joints3D,1));
+   coms3D = Array{Float32, 2}(3,sz); # center of masses in world coor.
+   trMats = Array{Float32, 3}(3,3,sz); # transformation matrices
+   validIndices= Array{Int64}(sz);
+
    if raw
-       ximg = Array{Int16, 3}(480,640,length(filenames));
+       ximg = Array{Int16, 3}(480,640,sz);
    end
 
    param = getNYUCameraParameters();
@@ -43,10 +47,14 @@ function readNYUTesting(;sz=-1, raw = false)
       xtst[:,:,:,c] = reshape(convert(Array{Float32,2}, p), imgSize,imgSize,1,1);
 
       com3D = jointImgTo3D(map(Float32,com), param);
+      k=0;
       for j in 1:size(joints3D,2) #each joint
-          joints3DCrop[3*(j-1)+1] = joints3D[i,j,1] - com3D[1];
-          joints3DCrop[3*(j-1)+2] = joints3D[i,j,2] - com3D[2];
-          joints3DCrop[3*(j-1)+3] = joints3D[i,j,3] - com3D[3];
+          if j in jointIndices
+              joints3DCrop[3*k+1] = joints3D[i,j,1] - com3D[1];
+              joints3DCrop[3*k+2] = joints3D[i,j,2] - com3D[2];
+              joints3DCrop[3*k+3] = joints3D[i,j,3] - com3D[3];
+              k +=1;
+          end
       end
       ytst[:,c]= joints3DCrop./300;
       coms3D[:,c] = com3D;
@@ -87,23 +95,26 @@ end
 #sz: early stop size
 function readNYUTraining(;sz=-1, raw = false)
    dir = Pkg.dir(pwd(),"data","NYU", "train");
-
    # read test images
    filenames = searchdir(dir, "png");
-   xtrn = Array{Float32, 4}(imgSize,imgSize,1,length(filenames));
+   if sz == -1
+       sz = length(filenames)
+   end
+   xtrn = Array{Float32, 4}(imgSize,imgSize,1,sz);
 
    info("Reading NYU training sequence ...")
    file = matopen(joinpath(dir,"joint_data.mat"))
    joints3D = read(file, "joint_xyz")[1,:,:,:]
    close(file)
 
-   joints3DCrop = Array{Float32, 1}(size(joints3D,2)*size(joints3D,3));
-   ytrn = Array{Float32, 2}(size(joints3D,2)*size(joints3D,3), size(joints3D,1));
-   coms3D = Array{Float32, 2}(3,length(filenames)); # center of masses in world coor.
-   trMats = Array{Float32, 3}(3,3,length(filenames)); # transformation matrices
-   validIndices= Array{Int64}(length(filenames));
+   jointIndices = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 27, 30, 31, 32] .+1;
+   joints3DCrop = Array{Float32, 1}(length(jointIndices)*3);
+   ytrn = Array{Float32, 2}(length(jointIndices)*3, size(joints3D,1));
+   coms3D = Array{Float32, 2}(3,sz); # center of masses in world coor.
+   trMats = Array{Float32, 3}(3,3,sz); # transformation matrices
+   validIndices= Array{Int64}(sz);
    if raw
-       ximg = Array{Int16, 3}(480,640,length(filenames));
+       ximg = Array{Int16, 3}(480,640,sz);
    end
 
    param = getNYUCameraParameters();
@@ -123,10 +134,14 @@ function readNYUTraining(;sz=-1, raw = false)
       xtrn[:,:,:,c] = reshape(convert(Array{Float32,2}, p), imgSize,imgSize,1,1);
 
       com3D = jointImgTo3D(map(Float32,com), param);
+      k=0;
       for j in 1:size(joints3D,2) #each joint
-          joints3DCrop[3*(j-1)+1] = joints3D[i,j,1] - com3D[1];
-          joints3DCrop[3*(j-1)+2] = joints3D[i,j,2] - com3D[2];
-          joints3DCrop[3*(j-1)+3] = joints3D[i,j,3] - com3D[3];
+          if j in jointIndices
+              joints3DCrop[3*k+1] = joints3D[i,j,1] - com3D[1];
+              joints3DCrop[3*k+2] = joints3D[i,j,2] - com3D[2];
+              joints3DCrop[3*k+3] = joints3D[i,j,3] - com3D[3];
+              k +=1;
+          end
       end
       ytrn[:,c]= joints3DCrop./300;
       coms3D[:,c] = com3D;
@@ -161,7 +176,7 @@ function readNYUTraining(;sz=-1, raw = false)
        info("Raw images:", summary(ximg))
        return (xtrn, ytrn, coms3D, trMats,validIndices, ximg);
    else
-       return (xtrn, ytrn, coms3D, validIndices, trMats);
+       return (xtrn, ytrn, coms3D, trMats, validIndices);
    end
 end
 
