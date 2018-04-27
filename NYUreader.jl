@@ -17,6 +17,7 @@ function readNYUTesting(;sz=-1, raw = false)
    info("Reading NYU test sequence ...")
    file = matopen(joinpath(dir,"joint_data.mat"))
    joints3D = read(file, "joint_xyz")[1,:,:,:]
+   coms2D = read(file, "joint_uvd")[1,:,33,:]
    close(file)
 
    jointIndices = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 27, 30, 31, 32] .+1;
@@ -38,11 +39,7 @@ function readNYUTesting(;sz=-1, raw = false)
       rawimg = rawview(channelview(load(path)));
       dpt = map(Int16, ((2^8).*rawimg[2,:,:] .+ rawimg[3,:,:]));
       #preprocess the image, extract hand,normalize depth to [-1,1]
-      (p, com, M) = preprocess(dpt, getNYUCameraParameters(), imgSize; dset=1);
-      if any(isnan, com) || std(p) < 0.5
-          info(:NotInclude , i , filenames[i]);
-          continue;
-      end
+      (p, com, M) = preprocessNYUGtCom(dpt, param, imgSize, coms2D[i,:])
       c += 1;
       xtst[:,:,:,c] = reshape(convert(Array{Float32,2}, p), imgSize,imgSize,1,1);
 
@@ -105,6 +102,7 @@ function readNYUTraining(;sz=-1, raw = false)
    info("Reading NYU training sequence ...")
    file = matopen(joinpath(dir,"joint_data.mat"))
    joints3D = read(file, "joint_xyz")[1,:,:,:]
+   coms2D = read(file, "joint_uvd")[1,:,33,:]
    close(file)
 
    jointIndices = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 27, 30, 31, 32] .+1;
@@ -125,11 +123,7 @@ function readNYUTraining(;sz=-1, raw = false)
       rawimg = rawview(channelview(load(path)));
       dpt = map(Int16, ((2^8).*rawimg[2,:,:] .+ rawimg[3,:,:]));
       #preprocess the image, extract hand,normalize depth to [-1,1]
-      (p, com, M) = preprocess(dpt, getNYUCameraParameters(), imgSize; dset=1);
-      if any(isnan, com) || std(p) < 0.5
-          info(:NotInclude , i , filenames[i]);
-          continue;
-      end
+      (p, com, M) = preprocessNYUGtCom(dpt, param, imgSize, coms2D[i,:])
       c += 1;
       xtrn[:,:,:,c] = reshape(convert(Array{Float32,2}, p), imgSize,imgSize,1,1);
 
@@ -187,4 +181,20 @@ end
 :param uy: principal point in y direction =#
 function getNYUCameraParameters()
     return (588.03, 587.07, 320., 240.)
+end
+
+function showHandNYU(i; tr=true)
+    if tr
+        dir= Pkg.dir(pwd(),"data","NYU", "train");
+    else
+        dir= Pkg.dir(pwd(),"data","NYU", "test");
+    end
+    filenames = searchdir(dir, "png");
+    path = joinpath(dir,filenames[i]);
+    rawimg = rawview(channelview(load(path)));
+    dpt = map(Int16, ((2^8).*rawimg[2,:,:] .+ rawimg[3,:,:]));
+    (p, com, M) = preprocess(dpt, (588.03, 587.07, 320., 240.), 128; dset=1);
+    imshow(p)
+    imshow(dpt);
+    println(std(p))
 end

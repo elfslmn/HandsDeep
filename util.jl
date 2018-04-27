@@ -208,3 +208,15 @@ function extractPatch(img, center, dim; dset = 0)
     p = (p.- centerz)./ cube;
     return p
 end
+
+function preprocessNYUGtCom(img, param, imgSize, com)
+    #extract hand
+    st, fn = comToBounds(com, (300,300,300), param)
+    p, M = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=1);
+    hd = imresize(p,(imgSize,imgSize))
+    centerz = com[3]
+    cube = 300/2;
+    # normalize
+    hd = (hd.- centerz)./ cube;
+    return hd, com, M;
+end
