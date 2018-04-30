@@ -27,7 +27,7 @@ function showAnnotation(img,joints; pred = Any[])
         yb = yt + 5;
         yb = yb > h ? h:yb;
 
-        img3[yt:yb, xr:xl] = RGB{N0f16}(m ,0.,0.);
+        img3[yt:yb, xr:xl] = RGB{N0f16}(0.,m,0.);
     end
     # show prediction
     if size(pred,1) != 0
@@ -43,7 +43,7 @@ function showAnnotation(img,joints; pred = Any[])
             if yb>h
                 yb = h;
             end
-            img3[yt:yb, xr:xl] = RGB{N0f16}(0.,m,0.);
+            img3[yt:yb, xr:xl] = RGB{N0f16}(0.,0.,m);
         end
     end
     imshow(img3);
@@ -110,6 +110,7 @@ end
 
 function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend; cropz = true, dset= 0)
     cropped = dpt[max(ystart, 1):min(yend, size(dpt,1)), max(xstart, 1):min(xend, size(dpt,2))]
+    #info((:cropped, max(ystart, 1),min(yend, size(dpt,1)), max(xstart, 1),min(xend, size(dpt,2))))
 
     if cropz
         if dset == 0
@@ -126,8 +127,12 @@ function getCrop(dpt, xstart, xend, ystart, yend, zstart, zend; cropz = true, ds
     end
 
     # to keep the w/h ratio
-    padded = parent(padarray(cropped, Fill(zendf,(abs(ystart-1)-max(ystart-1, 0),abs(xstart-1)-max(xstart-1, 0))
-    ,(abs(yend)-min(yend, size(dpt,1)), abs(xend)-min(xend, size(dpt,2))))))
+    if ystart > size(dpt,1) || yend < 1 || xstart > size(dpt,2) || yend < 1
+        padded = fill(zendf, yend-ystart+1, xend -xstart+1)
+    else
+        padded = parent(padarray(cropped, Fill(zendf,(abs(ystart-1)-max(ystart-1, 0),abs(xstart-1)-max(xstart-1, 0))
+        ,(abs(yend)-min(yend, size(dpt,1)), abs(xend)-min(xend, size(dpt,2))))))
+    end
 
     trans = eye(Float32, 3)
     trans[1, 3] = -xstart;
@@ -203,7 +208,7 @@ function extractPatch(img, center, dim; dset = 0)
         cube = 300/2;
         centerz = center[3];
     end
-    #info(xstart, xend, ystart, yend, zstart, zend);
+    #info((xstart, xend, ystart, yend, zstart, zend));
     p, M = getCrop(img,xstart, xend, ystart, yend, zstart, zend; dset = dset);
     p = (p.- centerz)./ cube;
     return p
@@ -212,7 +217,7 @@ end
 function preprocessNYUGtCom(img, param, imgSize, com)
     #extract hand
     st, fn = comToBounds(com, (300,300,300), param)
-    p, M = getCrop(dpt, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=1);
+    p, M = getCrop(img, st[1], fn[1], st[2], fn[2], st[3], fn[3]; dset=1);
     hd = imresize(p,(imgSize,imgSize))
     centerz = com[3]
     cube = 300/2;
