@@ -25,7 +25,6 @@ function readNYUTesting(;sz=-1, raw = false)
    ytst = Array{Float32, 2}(length(jointIndices)*3, size(joints3D,1));
    coms3D = Array{Float32, 2}(3,sz); # center of masses in world coor.
    trMats = Array{Float32, 3}(3,3,sz); # transformation matrices
-   validIndices= Array{Int64}(sz);
 
    if raw
        ximg = Array{Int16, 3}(480,640,sz);
@@ -56,7 +55,6 @@ function readNYUTesting(;sz=-1, raw = false)
       ytst[:,c]= joints3DCrop./300;
       coms3D[:,c] = com3D;
       trMats[:,:,c] = M;
-      validIndices[c]=i;
       if raw
           ximg[:,:,c] = dpt;
       end
@@ -73,7 +71,6 @@ function readNYUTesting(;sz=-1, raw = false)
    ytst = ytst[:,1:c]
    coms3D = coms3D[:,1:c];
    trMats = trMats[:,:,1:c];
-   validIndices = validIndices[1:c];
    if raw
        ximg = ximg[:,:,1:c];
    end
@@ -83,9 +80,9 @@ function readNYUTesting(;sz=-1, raw = false)
 
    if raw
        info("Raw images:", summary(ximg))
-       return (xtst, ytst,coms3D, trMats, validIndices, ximg )
+       return (xtst, ytst,coms3D, trMats, ximg )
    else
-       return (xtst, ytst,coms3D, trMats, validIndices)
+       return (xtst, ytst,coms3D, trMats)
    end
 end
 
@@ -110,7 +107,6 @@ function readNYUTraining(;sz=-1, raw = false)
    ytrn = Array{Float32, 2}(length(jointIndices)*3, size(joints3D,1));
    coms3D = Array{Float32, 2}(3,sz); # center of masses in world coor.
    trMats = Array{Float32, 3}(3,3,sz); # transformation matrices
-   validIndices= Array{Int64}(sz);
    if raw
        ximg = Array{Int16, 3}(480,640,sz);
    end
@@ -140,7 +136,6 @@ function readNYUTraining(;sz=-1, raw = false)
       ytrn[:,c]= joints3DCrop./300;
       coms3D[:,c] = com3D;
       trMats[:,:,c] = M;
-      validIndices[c]=i;
 
       if raw
           ximg[:,:,c] = dpt;
@@ -158,7 +153,6 @@ function readNYUTraining(;sz=-1, raw = false)
    ytrn = ytrn[:,1:c]
    coms3D = coms3D[:,1:c];
    trMats = trMats[:,:,1:c];
-   validIndices = validIndices[1:c];
    if raw
        ximg = ximg[:,:,1:c];
    end
@@ -168,9 +162,9 @@ function readNYUTraining(;sz=-1, raw = false)
 
    if raw
        info("Raw images:", summary(ximg))
-       return (xtrn, ytrn, coms3D, trMats,validIndices, ximg);
+       return (xtrn, ytrn, coms3D, trMats,ximg);
    else
-       return (xtrn, ytrn, coms3D, trMats, validIndices);
+       return (xtrn, ytrn, coms3D, trMats);
    end
 end
 
