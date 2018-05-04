@@ -3,7 +3,7 @@ using Images;
 #include("transformation.jl");
 
 # joints and pred should be unnormalized
-function showAnnotation(img,joints; pred = Any[])
+function showAnnotation(img,joints; pred = Any[], ref=Any[])
     if typeof(img[1,1]) != Gray{N0f16}
         if typeof(img[1,1]) == Int16 #NYU images
             img = normalizeDepth(map(Float32, img); a=0,b=1);
@@ -19,12 +19,12 @@ function showAnnotation(img,joints; pred = Any[])
     for i in 1:3:length(joints)
         xr = round(Int,joints[i]);
         xr = xr < 1 ? 1:xr;
-        xl = xr + 5;
+        xl = xr + 3;
         xl = xl > w ? w:xl;
 
         yt = round(Int,joints[i+1]);
         yt = yt < 1 ? 1:yt;
-        yb = yt + 5;
+        yb = yt + 3;
         yb = yb > h ? h:yb;
 
         img3[yt:yb, xr:xl] = RGB{N0f16}(0.,m,0.);
@@ -33,10 +33,10 @@ function showAnnotation(img,joints; pred = Any[])
     if size(pred,1) != 0
         for i in 1:3:length(pred)
             xr = round(Int,pred[i]);
-            xl = xr + 5;
+            xl = xr + 3;
             yt = round(Int,pred[i+1]);
             # print("x,y="); print(xr); print("-"); println(yt);
-            yb = yt + 5;
+            yb = yt + 3;
             if xl > w
                 xl = w;
             end
@@ -44,6 +44,22 @@ function showAnnotation(img,joints; pred = Any[])
                 yb = h;
             end
             img3[yt:yb, xr:xl] = RGB{N0f16}(0.,0.,m);
+        end
+    end
+    if size(ref,1) != 0
+        for i in 1:3:length(ref)
+            xr = round(Int,ref[i]);
+            xl = xr + 3;
+            yt = round(Int,ref[i+1]);
+            # print("x,y="); print(xr); print("-"); println(yt);
+            yb = yt + 3;
+            if xl > w
+                xl = w;
+            end
+            if yb>h
+                yb = h;
+            end
+            img3[yt:yb, xr:xl] = RGB{N0f16}(m,0.,m);
         end
     end
     imshow(img3);
