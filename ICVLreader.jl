@@ -39,6 +39,7 @@ function readICVLTesting(;sz = -1,raw = false)
          dpt = convert(Array{Float32,2}, load(path));
          p, com, M = preprocess(dpt, getICVLCameraParameters(), imgSize)
          if any(isnan, p)
+             print("skip ", i);
              continue;
          end
 
@@ -124,6 +125,7 @@ function readICVLTraining(;sz = -1, raw = false)
         dpt = convert(Array{Float32,2}, load(path));
         p, com , M = preprocess(dpt, param, imgSize)
         if any(isnan, p)
+            println("skip ", i);
             continue;
         end
         c +=1;
@@ -223,7 +225,7 @@ function getICVLJointImages(;sz=-1)
     c=0;
     for i in 1:size(files,1)
          path = joinpath(dir,files[i,1]);
-         if(!isfile(path))
+         if(!isfile(path)) || i==17855
             continue;
          end
          img = convert(Array{Float32,2}, load(path));
@@ -245,4 +247,22 @@ function getICVLJointImages(;sz=-1)
     x64 = x64[:,:,:,1:c,:]
     info("Images:" , summary(x64));
     return x64;
+end
+
+function showRes(i,w)
+    dir = Pkg.dir(pwd(),"data","ICVL", "Testing", "Depth");
+    l1 = open(readdlm, "data/ICVL/Testing/test_seq_1.txt");
+    l2 = open(readdlm, "data/ICVL/Testing/test_seq_2.txt");
+    files = vcat(l1,l2);
+
+    path = joinpath(dir,files[i,1]);
+    img = convert(Array{Float32,2}, load(path));
+    p, com , M = preprocess(img, getICVLCameraParameters(), 128)
+    joints = files[i,2:end];
+    com3D = jointImgTo3D(com, getICVLCameraParameters());
+
+    pred = embedNet(w,reshape(p,128,128,1,1); drop=false);
+    pred2D = convertCrop3DToImg(com3D,pred,0)
+    #showAnnotation(img, joints, pred = (pred2D+joints)./2);
+    showAnnotation(img, joints, pred = pred2D)
 end
