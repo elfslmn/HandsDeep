@@ -19,12 +19,12 @@ function showAnnotation(img,joints; pred = Any[], ref=Any[])
     for i in 1:3:length(joints)
         xr = round(Int,joints[i]);
         xr = xr < 1 ? 1:xr;
-        xl = xr + 3;
+        xl = xr + 2;
         xl = xl > w ? w:xl;
 
         yt = round(Int,joints[i+1]);
         yt = yt < 1 ? 1:yt;
-        yb = yt + 3;
+        yb = yt + 2;
         yb = yb > h ? h:yb;
 
         img3[yt:yb, xr:xl] = RGB{N0f16}(0.,m,0.);
@@ -33,10 +33,10 @@ function showAnnotation(img,joints; pred = Any[], ref=Any[])
     if size(pred,1) != 0
         for i in 1:3:length(pred)
             xr = round(Int,pred[i]);
-            xl = xr + 3;
+            xl = xr + 2;
             yt = round(Int,pred[i+1]);
             # print("x,y="); print(xr); print("-"); println(yt);
-            yb = yt + 3;
+            yb = yt + 2;
             if xl > w
                 xl = w;
             end
@@ -48,11 +48,11 @@ function showAnnotation(img,joints; pred = Any[], ref=Any[])
     end
     if size(ref,1) != 0
         for i in 1:3:length(ref)
-            xr = round(Int,ref[i]);
-            xl = xr + 3;
-            yt = round(Int,ref[i+1]);
+            xr = round(Int,(ref[i]));
+            xl = xr + 2;
+            yt = round(Int,(ref[i+1]));
             # print("x,y="); print(xr); print("-"); println(yt);
-            yb = yt + 3;
+            yb = yt + 2;
             if xl > w
                 xl = w;
             end
@@ -63,6 +63,7 @@ function showAnnotation(img,joints; pred = Any[], ref=Any[])
         end
     end
     imshow(img3);
+    return img3;
 end
 
 #= Calculate the center of mass
@@ -118,8 +119,8 @@ function comToBounds(com, size, param)
     zend = convert(Int64, floor(com[3] + size[3] / 2.));
     xstart = convert(Int64, floor((com[1] * com[3] / param[1] - size[1] / 2.) / com[3]*param[1]))
     xend = convert(Int64, floor((com[1] * com[3] / param[1] + size[1] / 2.) / com[3]*param[1]))
-    ystart = convert(Int64, floor((com[2] * com[3] / param[2] - size[2] / 2.) / com[3]*param[2]))
-    yend = convert(Int64, floor((com[2] * com[3] / param[2] + size[2] / 2.) / com[3]*param[2]))
+    ystart = convert(Int64, floor((com[2] * com[3] / abs(param[2]) - size[2] / 2.) / com[3]*abs(param[2])))
+    yend = convert(Int64, floor((com[2] * com[3] / abs(param[2]) + size[2] / 2.) / com[3]*abs(param[2])))
     r = [xstart, ystart, zstart] , [xend, yend, zend];
     return r
 end

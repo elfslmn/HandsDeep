@@ -174,7 +174,7 @@ end
 :param ux: principal point in x direction
 :param uy: principal point in y direction =#
 function getNYUCameraParameters()
-    return (588.03, 587.07, 320., 240.)
+    return (588.03, -587.07, 320., 240.)
 end
 
 function showHandNYU(i; tr=true)
@@ -187,8 +187,59 @@ function showHandNYU(i; tr=true)
     path = joinpath(dir,filenames[i]);
     rawimg = rawview(channelview(load(path)));
     dpt = map(Int16, ((2^8).*rawimg[2,:,:] .+ rawimg[3,:,:]));
-    (p, com, M) = preprocess(dpt, (588.03, 587.07, 320., 240.), 128; dset=1);
+    (p, com, M) = preprocess(dpt, getNYUCameraParameters(), 128; dset=1);
     imshow(p)
     imshow(dpt);
     println(std(p))
+end
+
+function getNYUJointImages(;sz=-1)
+    dir = Pkg.dir(pwd(),"data","NYU", "train");
+    # read test images
+    filenames = searchdir(dir, "png");
+    if sz == -1
+        sz = length(filenames)
+    end
+    xtrn = Array{Float32, 4}(imgSize,imgSize,1,sz);
+
+    info("Reading NYU training sequence ...")
+    file = matopen(joinpath(dir,"joint_data.mat"))
+    joints3D = read(file, "joint_xyz")[1,:,:,:]
+    coms2D = read(file, "joint_uvd")[1,:,33,:]
+    close(file)
+
+    jointIndices = [0, 3, 6, 9, 12, 15, 18, 21, 24, 25, 27, 30, 31, 32];
+    param = getNYUCameraParameters();
+
+    njoint = 14;
+
+    #(height, width, channel, image count, joint count);
+    x64 = Array{Float32, 5}(64,64,1,size(files,1),njoint);
+    y = Array{Float32, 3}(3,size(files,1),njoint);
+
+    info("Starting to read training set...")
+    c=0;
+    for i in 1:size(files,1)
+        path = joinpath(dir,filenames[i]);
+        rawimg = rawview(channelview(load(path)));
+        dpt = map(Int16, ((2^8).*rawimg[2,:,:] .+ rawimg[3,:,:]));
+         img = convert(Array{Float32,2}, dpt);
+
+         # ground truth
+
+         for j in jointIndices
+             p = extractPatch(img, joints3D[3*j+1:3*j+3], 64);
+             x64[:,:,:,i,j+1] = p;
+         end
+         c += 1;
+         if c%1000 == 0
+             info(c," images are read..");
+         end
+         if c == sz
+             break;
+         end
+    end
+    x64 = x64[:,:,:,1:c,:]
+    info("Images:" , summary(x64));
+    return x64;
 end

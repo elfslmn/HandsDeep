@@ -109,7 +109,7 @@ function convertCrop3DToImg(com3D, joints3DCrop, dset)
         param = (241.42, 241.42, 160., 120.);
     else
         joints3D = copy(joints3DCrop.*300);
-        param = (588.03, 587.07, 320., 240.)
+        param = (588.03, -587.07, 320., 240.)
     end
     for i in 1:3:size(joints3DCrop,1)
         joints3D[i] += com3D[1];
