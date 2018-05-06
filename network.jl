@@ -55,12 +55,12 @@ end
 
 function initRefine(inputdim, outputdim, Atype)
     w = Any[]
-    #first conv layer (5,5)x8 with (2,2) pooling
+    #first conv layer (5,5)x8 with (4,4) pooling
     (x11,x12,cx1) = (inputdim[1], inputdim[1], 1) ;
     (w1,w2,cy) = (5,5,8);
     push!(w, xavier(w1,w2,cx1,cy))
     push!(w, zeros(1,1,cy,1))
-    x1 = (div(x11-w1+1,2),div(x12-w2+1,2),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=2
+    x1 = (div(x11-w1+1,4),div(x12-w2+1,4),cy)  # assuming conv4 with p=0, s=1 and pool with p=0,w=s=2
 
     #second conv layer (5,5)x8 with (2,2) pooling
     (x21,x22,cx2) =(inputdim[2], inputdim[2], 1) ;
@@ -78,21 +78,21 @@ function initRefine(inputdim, outputdim, Atype)
 
     # 512 fully connected
     s = prod(x1) + prod(x2) + prod(x3);
-    push!(w, xavier(512,s))
-    push!(w, zeros(512,1))
+    push!(w, xavier(1024,s))
+    push!(w, zeros(1024,1))
 
     # output layer
-    push!(w, xavier(outputdim,512))
+    push!(w, xavier(outputdim,1024))
     push!(w, zeros(outputdim,1))
 
     return map(Atype, w)
 end
 
 #Filter and pool sizes according to implementation(scalenet.py) not same as stated in paper
-function initScale(inputdim, outputdim, Atype; resizeFactor = 2)
+function initScale(inputdim, outputdim, Atype;)
     w = Any[]
-    # 1 - full scale (128,128,1)
-    (x1,x2,cx) = inputdim;
+    # 1 - full scale (64,64,1)
+    (x1,x2,cx) = (inputdim[1], inputdim[1],1);
     #first conv layer (5,5)x8 with (4,4) pooling
     (w1,w2,cy) = (5,5,8);
     push!(w, xavier(w1,w2,cx,cy))
@@ -112,8 +112,8 @@ function initScale(inputdim, outputdim, Atype; resizeFactor = 2)
     x_full = (div(x1-w1+1,1),div(x2-w2+1,1),cy)
     info(x_full)
 
-# 2 - half scale (64,64,1)
-    (x1,x2,cx) = (inputdim[1]/resizeFactor, inputdim[2]/resizeFactor, inputdim[3]) ;
+# 2 - half scale (32,32,1)
+    (x1,x2,cx) = (inputdim[2], inputdim[2], 1) ;
     #first conv layer (5,5)x8 with (2,2) pooling
     (w1,w2,cy) = (5,5,8);
     push!(w, xavier(w1,w2,cx,cy))
@@ -134,8 +134,8 @@ function initScale(inputdim, outputdim, Atype; resizeFactor = 2)
     x_half = map(Int, x_half);
     info(x_half)
 
-# 3 - quarter scale (32,32,1)
-    (x1,x2,cx) = (inputdim[1]/(resizeFactor^2), inputdim[2]/(resizeFactor^2), inputdim[3]) ;
+# 3 - quarter scale (16,16,1)
+    (x1,x2,cx) = (inputdim[3], inputdim[3], 1) ;
     #first conv layer (5,5)x8 with (2,2) pooling
     (w1,w2,cy) = (5,5,8);
     push!(w, xavier(w1,w2,cx,cy))
@@ -302,14 +302,14 @@ function scaleNet(w,x_all; drop = true)
     return x;
 end
 
-#TODO complete
+
 function refineNet(w,x; drop = true)
     x64 = x[1];
     x32 = x[2];
     x16 = x[3];
-    #largest conv layer (5,5)x8 with (2,2) pooling
+    #largest conv layer (5,5)x8 with (4,4) pooling
     x64 = conv4(w[1],x64) .+ w[2]
-    x64 = pool(relu.(x64); window =2)
+    x64 = pool(relu.(x64); window =4)
 
     #middle conv layer (5,5)x8 with (2,2) pooling
     x32 = conv4(w[3],x32) .+ w[4]
@@ -391,8 +391,13 @@ end
 lossgradient= grad(objective);
 
 function train_sgd(w, dtrn, net, opt; l2=0.001)
-    if net == refineNet
-        for (x64,y) in dtrn[1], (x32,y) in dtrn[2], (x16,y) in dtrn[3]
+    if net == refineNet || net == scaleNet
+        for i in 1:length(dtrn)
+            x = reshape(dtrn.x[:,128*(i-1)+1:128*i],64,64,1,128)
+            x64 = convert(dtrn.xtype,x )
+            x32 = convert(dtrn.xtype, x[16:47, 16:47,:,:])
+            x16 = convert(dtrn.xtype,  x[24:39, 24:39,:,:])
+            y = convert(dtrn.ytype, dtrn.y[:,128*(i-1)+1:128*i])
             gr = lossgradient(w,(x64,x32,x16) ,y, net, l2)
             update!(w, gr, opt)
         end
@@ -471,13 +476,18 @@ end
 
 function getRefineLoss(w,data)
     dist = 0;
-    all = data[1].length; print("all=",all);
-    for (x64,y) in data[1], (x32,y) in data[2], (x16,y) in data[3]
+    all = data.length; print("all=",all);
+    for i in 1:length(data)
+        x = reshape(data.x[:,128*(i-1)+1:128*i],64,64,1,128)
+        x64 = convert(data.xtype, x)
+        x32 = convert(data.xtype, x[16:47, 16:47,:,:])
+        x16 = convert(data.xtype,  x[24:39, 24:39,:,:])
+        y = convert(data.ytype, data.y[:,128*(i-1)+1:128*i])
         pred = refineNet(w,(x64,x32,x16); drop = false);
 
         for j in 1:size(pred,2)
             d = sqrt((y[1,j]-pred[1,j])^2 + (y[2,j]-pred[2,j])^2 + (y[3,j]-pred[3,j])^2);
-            dist += d; # to calculate mean distance of all joints
+            dist += d*250; # to calculate mean distance of all joints
         end
     end
     return (dist/all)
@@ -501,4 +511,74 @@ function getMeanErrorOfEachJoint(y, pred; dset= 0)
     end
     err = err./nSample;
     return err;
+end
+
+function refineJointIterative(img, pred3D, com3D, w_ref, it, dset)
+    p_orig = copy(pred3D);
+    if dset == 0
+        scale = 250
+        param = (241.42, 241.42, 160., 120.);
+    else
+        scale = 300
+        param = (588.03, -587.07, 320., 240.)
+    end
+    # get the joint location in image coordinates
+    for i in 1:it
+        pred2D = joint3DToImg(pred3D.*scale+com3D, param);
+        #info((:pred2d, pred2D))
+        p64 = extractPatch(img, pred2D, 64; dset=dset);
+        p64 = reshape(p64,64,64,1,1); #convert to tensor
+        p32 = p64[16:47, 16:47,:,:];
+        p16 = p32[8:23, 8:23, :,:];
+        pred3D[1:2] = refineNet(w_ref,(p64,p32,p16); drop=false)[1:2]
+    end
+    return pred3D;
+end
+
+function refineJointIterativeBatch(imgs, preds3D, coms3D,gt, w_ref, it, dset)
+    refs = Any[];
+    p=0; r=0; c=0; pos=0;
+    for i in 1:size(imgs,3)
+        ref = refineJointIterative(imgs[:,:,i], preds3D[:,i], coms3D[:,i], w_ref, it, dset)
+        (dp, dr) = refinePerformance(preds3D[:,i],gt[:,i],ref,coms3D[:,i], dset)
+        p+=dp; r+=dr;
+        if dp>dr
+            pos+=1;
+        end
+        push!(refs,ref);
+        c+=1;
+    end
+    print("pos=",pos," out of ",c,"\t");
+    return refs, p/c, r/c, pos;
+end
+
+function refinePerformance(pred3d,gt3d,ref3d,com3d, dset)
+    scale = dset == 0 ? 250:300;
+    ref = ref3d.*scale
+    p = pred3d.*scale
+    gt = gt3d.*scale
+    dr = sqrt((ref[1]-gt[1])^2 + (ref[2]-gt[2])^2 + (ref[3]-gt[3])^2)
+    dp = sqrt((p[1]-gt[1])^2 + (p[2]-gt[2])^2 + (p[3]-gt[3])^2);
+    return (dp, dr)
+end
+
+function refineAndShow(imgs, w_refs, comstst, ytst, pred, i, it; dset=0)
+    njoint = dset == 0 ? 16:14
+    refs = zeros(pred[:,i]);
+    img = imgs[:,:,i];
+    pr = convertCrop3DToImg(comstst[:,i], pred[:,i],dset)
+    gt = convertCrop3DToImg(comstst[:,i], ytst[:,i],dset)
+    p=0; r=0;
+    for j in 1:njoint
+        jin = 3*(j-1)+1:3*j;
+        ref3d = refineJointIterative(imgs[:,:,i], pred[jin,i], comstst[:,i], w_refs[j],it,dset);
+        ref = convertCrop3DToImg(comstst[:,i],ref3d ,dset)
+        refs[jin] = ref;
+        (dp, dr) = refinePerformance(pred[jin,i],ytst[jin,i],ref3d,comstst[:,i], dset)
+         p+=dp; r+=dr;
+    end
+    ann = showAnnotation(img, gt, pred= pr,ref=refs)
+    info((:dpred,p/njoint))
+    info((:dref,r/njoint))
+    return ann;
 end
